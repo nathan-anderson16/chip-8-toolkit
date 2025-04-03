@@ -1,4 +1,5 @@
 use core::panic;
+use std::sync::{LazyLock, Mutex};
 
 /// Creates getters and setters for the given value.
 #[macro_export]
@@ -24,11 +25,18 @@ pub fn get_memory_u16(addr: u16) -> u16 {
 }
 
 /// Set the memory value at the current position.
-pub fn set_memory(addr: u16, val: u8) {
+pub fn set_memory_u8(addr: u16, val: u8) {
     assert!((addr & 0xf000) == 0, "Address must be 12-bit!");
     unsafe {
         MEMORY[addr as usize] = val;
     }
+}
+
+/// Set the memory value at the current position.
+pub fn set_memory_u16(addr: u16, val: u16) {
+    assert!((addr & 0xf000) == 0, "Address must be 12-bit!");
+    set_memory_u8(addr, ((val >> 8) & 0x00FF) as u8);
+    set_memory_u8(addr + 1, (val & 0x00FF) as u8);
 }
 
 pub const DISPLAY_WIDTH: usize = 64;
@@ -95,19 +103,52 @@ pub fn set_i(val: u16) {
 pub const STACK_SIZE: usize = 1024;
 
 /// The stack. Contains 16-bit addresses. Used for calling and returning from functions.
-pub static STACK: [u16; STACK_SIZE] = [0u16; STACK_SIZE];
+pub static mut STACK: LazyLock<Mutex<Vec<u16>>> =
+    LazyLock::new(|| Mutex::new(Vec::with_capacity(STACK_SIZE)));
 
-// TODO: Getters and setters for stack
+pub fn stack_push(val: u16) {
+    #[allow(static_mut_refs)]
+    unsafe {
+        STACK.lock().unwrap().push(val)
+    };
+}
+
+pub fn stack_pop() -> Option<u16> {
+    #[allow(static_mut_refs)]
+    unsafe {
+        STACK.lock().unwrap().pop()
+    }
+}
 
 /// The delay timer. Decremented at a rate of 60 HZ until it reaches 0.
-pub static DELAY_TIMER: u8 = 0;
+pub static mut DELAY_TIMER: u8 = 0;
 
-// TODO: Getters and setters for delay timer
+pub fn get_delay_timer() -> u8 {
+    unsafe { DELAY_TIMER }
+}
+
+pub fn set_delay_timer(val: u8) {
+    unsafe { DELAY_TIMER = val }
+}
+
+pub fn decrement_delay_timer() {
+    unsafe { DELAY_TIMER = DELAY_TIMER.saturating_sub(1) }
+}
 
 /// The sound timer. Decremeted at a rate of 60 HZ until it reaches 0. Plays a sound as long as it is not 0.
-pub static SOUND_TIMER: u8 = 0;
+pub static mut SOUND_TIMER: u8 = 0;
 
-// TODO: Getters and setters for sound timer
+pub fn get_sound_timer() -> u8 {
+    unsafe { SOUND_TIMER }
+}
+
+pub fn set_sound_timer(val: u8) {
+    unsafe { SOUND_TIMER = val }
+}
+
+pub fn decrement_sound_timer() {
+    unsafe { SOUND_TIMER = SOUND_TIMER.saturating_sub(1) }
+}
 
 /// Registers
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

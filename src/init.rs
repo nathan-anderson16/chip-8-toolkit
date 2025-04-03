@@ -1,8 +1,8 @@
 use std::fs;
 
-use crate::system::{set_memory, set_pc};
+use crate::system::{set_memory_u8, set_pc};
 
-pub const ROM_PATH: &str = "./ibm_logo.ch8";
+pub const ROM_PATH: &str = "roms/tetris.ch8";
 
 /// Initialize memory:
 /// - Set the font data at 0x50
@@ -28,13 +28,13 @@ fn init_memory() {
     ];
 
     for (i, item) in font.iter().enumerate() {
-        set_memory((0x50 + i) as u16, *item);
+        set_memory_u8((0x50 + i) as u16, *item);
     }
 
     // Initialize the ROM
     let rom_bytes = fs::read(ROM_PATH).expect("failed to read rom file");
     for (i, item) in rom_bytes.iter().enumerate() {
-        set_memory((0x200 + i) as u16, *item);
+        set_memory_u8((0x200 + i) as u16, *item);
     }
 }
 
