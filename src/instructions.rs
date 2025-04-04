@@ -1,6 +1,11 @@
-use crate::system::Register;
+use std::fmt::Debug;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use crate::{
+    run::decode,
+    system::{Register, get_memory_u16, get_register},
+};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
     /// 0NNN. Pause execution of the program and call a subroutine written in machine language instead.
     /// NOT TO BE USED.
@@ -79,4 +84,78 @@ pub enum Instruction {
     StoreMemory(u8),
     /// FX65. Load the values of each register from V0 to VX, inclusive, at successive memory addresses, starting at I. TODO: Add a compatibility option to increment I each time a register is loaded.
     LoadMemory(u8),
+}
+
+impl Debug for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::ExecuteMachineLanguageRoutine => {
+                f.write_str("ExecuteMachineLanguageRoutine (Invalid)")
+            }
+            Self::Clear => f.write_str("Clear"),
+            Self::SubroutineReturn => f.write_str("SubroutineReturn"),
+            Self::Jump(nnn) => {
+                let instruction_raw = get_memory_u16(nnn);
+                let instruction = decode(instruction_raw);
+                if let Some(ins) = instruction {
+                    f.write_str(format!("Jump({:#06x} -> {:?})", nnn, ins).as_str())
+                } else {
+                    f.write_str(format!("Jump({:#06x} -> (invalid))", nnn,).as_str())
+                }
+            }
+            Self::SubroutineCall(nnn) => {
+                f.write_str(format!("SubroutineCall({:#06x})", nnn).as_str())
+            }
+            Self::SkipConditional1(vx, nn) => f.write_str(
+                format!("SkipEqual({vx} -> {:#04x}, {:#04x})", get_register(vx), nn).as_str(),
+            ),
+            Self::SkipConditional2(vx, nn) => f.write_str(
+                format!(
+                    "SkipNotEqual({vx} -> {:#04x}, {:#04x})",
+                    get_register(vx),
+                    nn
+                )
+                .as_str(),
+            ),
+            Self::SkipConditional3(vx, vy) => f.write_str(
+                format!(
+                    "SkipEqual({vx} -> {:#04x}, {vy} -> {:#04x})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::SetRegister(vx, nn) => {
+                f.write_str(format!("SetRegister({vx}, {:#04x})", nn).as_str())
+            }
+            Self::Add(vx, nn) => f.write_str(
+                format!(
+                    "SetRegister({vx} -> {:#04x}, {:#04x})",
+                    get_register(vx),
+                    nn
+                )
+                .as_str(),
+            ),
+            Self::RegSet(vx, vy) => f.write_str(
+                format!("SetRegister({vx}, {vy} -> {:#04x})", get_register(vy)).as_str(),
+            ),
+            Self::BinaryOr(vx, vy) => f.write_str(
+                format!(
+                    "BinaryOr({vx} -> {:#04x}, {vy} -> {:#04x})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::BinaryAnd(vx, vy) => f.write_str(
+                format!(
+                    "BinaryAnd({vx} -> {:#04x}, {vy} -> {:#04x})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            _ => f.write_str("TODO"),
+        }
+    }
 }

@@ -1,8 +1,7 @@
 use core::panic;
-#[allow(unused_imports)] // used in debugging
-use std::io;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
+    io,
     sync::OnceLock,
     thread,
     time::{Duration, SystemTime},
@@ -13,15 +12,16 @@ use device_query::{DeviceQuery, DeviceState, Keycode};
 use crate::{
     instructions::Instruction,
     system::{
-        DISPLAY_HEIGHT, DISPLAY_WIDTH, Register, decrement_delay_timer, decrement_sound_timer,
-        get_delay_timer, get_display, get_i, get_memory_u8, get_memory_u16, get_pc, get_register,
-        get_sound_timer, set_delay_timer, set_display, set_i, set_memory_u8, set_memory_u16,
-        set_pc, set_register, set_sound_timer, stack_pop, stack_push,
+        DISPLAY_HEIGHT, DISPLAY_WIDTH, REGISTERS, Register, decrement_delay_timer,
+        decrement_sound_timer, get_delay_timer, get_display, get_i, get_memory_u8, get_memory_u16,
+        get_pc, get_register, get_registers, get_sound_timer, set_delay_timer, set_display, set_i,
+        set_memory_u8, set_memory_u16, set_pc, set_register, set_sound_timer, stack_pop,
+        stack_push,
     },
 };
 
 /// The number of instructions to execute per second.
-pub const INSTRUCTION_SPEED: usize = 700;
+pub const INSTRUCTION_SPEED: usize = 720;
 
 pub static KEYPRESS_MAP: OnceLock<HashMap<Keycode, u8>> = OnceLock::new();
 pub static REVERSE_KEYPRESS_MAP: OnceLock<HashMap<u8, Keycode>> = OnceLock::new();
@@ -36,9 +36,12 @@ pub fn run() {
 
     let device_state = DeviceState::new();
     let mut pressed_keys: HashSet<Keycode> = HashSet::new();
-    // Used for GetKey
+    // Used for the GetKey instruction
     #[allow(unused_assignments)] // it thinks this is unused
     let mut last_pressed_keys: HashSet<Keycode> = HashSet::new();
+
+    // Whether we are currently debugging.
+    let mut is_debug = false;
 
     KEYPRESS_MAP.get_or_init(|| {
         // 1 2 3 C
@@ -89,6 +92,13 @@ pub fn run() {
         h
     });
 
+    // Used for printing debug messages to the right of the display
+    let mut info_lines: Vec<String> = Vec::with_capacity(DISPLAY_HEIGHT);
+    // Detecting changes in register state
+    let mut old_register_state = get_registers();
+    // The last 3 instructions
+    let mut last_instructions: VecDeque<(u16, u16, Instruction)> = VecDeque::with_capacity(3);
+
     loop {
         // Update keyboard state
         let keys = device_state.get_keys();
@@ -98,11 +108,90 @@ pub fn run() {
             pressed_keys.insert(key);
         }
 
+        macro_rules! info {
+            () => {
+                info_lines.push(String::new());
+            };
+            ($($arg:tt)*) => {
+                info_lines.push(format!($($arg)*));
+            };
+        }
+
+        macro_rules! infonnl {
+            ($($arg:tt)*) => {
+                let n_lines = info_lines.len() - 1;
+                info_lines[n_lines].push_str(format!($($arg)*).as_str());
+            };
+        }
+
+        if pressed_keys.contains(&Keycode::Escape) {
+            is_debug = true;
+            print!("\x1b[2K\r"); // Clear the current line to remove the escape code
+        }
+
         // Fetch the next instruction
         let instruction_raw = fetch();
 
         // Decode the instruction
-        let instruction = decode(instruction_raw);
+        let Some(instruction) = decode(instruction_raw) else {
+            invalid_instruction(instruction_raw);
+        };
+
+        // If debugging, set debug info
+        if is_debug {
+            // If the current instruction is draw, skip to the next vertical blank
+            if let Instruction::Draw(_, _, _) = instruction {
+                while n_instructions_executed % 12 != 1 {
+                    n_instructions_executed += 1;
+                }
+            }
+
+            info!("-----------");
+            info!("INSTRUCTION");
+            info!("-----------");
+            for instruction in last_instructions.iter().rev() {
+                info!(
+                    "\x1b[2;37m{:#06x}: {:#04x} -> {:?}\x1b[0m",
+                    instruction.0, instruction.1, instruction.2
+                );
+            }
+            info!(
+                "\x1b[32m{:#06x}: {:#04x} -> {:?}\x1b[0m",
+                get_pc() - 2,
+                instruction_raw,
+                instruction
+            );
+            // Register values
+            info!("-----------");
+            info!(" REGISTERS ");
+            info!("-----------");
+            for (i, old_reg) in old_register_state.iter().enumerate() {
+                let reg = get_register((i as u8).into());
+                info!("V{:x} | {:#04x}", i, reg);
+                if *old_reg != reg {
+                    infonnl!(" \x1b[2;37m<- {:#04x}\x1b[0m", old_reg);
+                }
+            }
+            info!();
+            info!("---------");
+            info!("  TIMER  ");
+            info!("---------");
+            // Current instruction
+            // Current value of PC
+            // Next instruction (if current instruction is jump, show the instruction at the address to jump to)
+            // Current value of I
+            // Value of address pointed to by I
+            // Stack
+            // Delay timer
+            // Sound timer
+        }
+
+        old_register_state = get_registers();
+
+        if last_instructions.len() == 3 {
+            last_instructions.pop_back();
+        }
+        last_instructions.push_front((get_pc() - 2, instruction_raw, instruction));
 
         // Execute the instruction
         execute(
@@ -123,45 +212,52 @@ pub fn run() {
 
         // Draw
         // Only draw at ~60FPS
-        if n_instructions_executed % 12 == 0 {
-            // if true {
+        if n_instructions_executed % 12 == 0 || is_debug {
             // Clear the terminal
-            // print!("\x1b[1A"); // Move cursor up 1 line
             for _ in 0..DISPLAY_HEIGHT + 3 {
                 print!("\x1b[2K\x1b[1A\r"); // Clear the line, then move the cursor up a line
             }
             print!("\x1b[2K\r"); // Clear the last line
 
-            print!("{}", (0..DISPLAY_WIDTH).map(|_| "__").collect::<String>());
+            print!("{}", (0..=DISPLAY_WIDTH).map(|_| "__").collect::<String>());
             // Show a colored square to indicate sound
             if get_sound_timer() > 0 && n_instructions_executed % 12 == 0 {
                 print!(" \x1b[43m  \x1b[0m");
             }
 
-            // print!(
-            //     "{} pressed keys: {:?}, pc: {:#x}, current instruction: {:#x} ({:?}), next instruction: {:#x}",
-            //     (0..DISPLAY_WIDTH).map(|_| "_").collect::<String>(),
-            //     pressed_keys,
-            //     get_pc(),
-            //     get_memory_u16(get_pc() - 2),
-            //     instruction,
-            //     get_memory_u16(get_pc())
-            // );
             println!();
             for y in 0..DISPLAY_HEIGHT {
+                print!("|");
                 for x in 0..DISPLAY_WIDTH {
                     let is_set = get_display(x as u8, y as u8);
                     print!("{}", if is_set { "\x1b[47m  \x1b[0m" } else { "  " });
                 }
-                println!("|");
+                print!("|");
+                if is_debug && y < info_lines.len() {
+                    print!(" {}", info_lines[y]);
+                }
+                println!();
             }
-            println!("{}", (0..DISPLAY_WIDTH).map(|_| "__").collect::<String>());
-            println!();
+            println!("|{}|", (0..DISPLAY_WIDTH).map(|_| "__").collect::<String>());
+            if !is_debug {
+                println!();
+            }
         }
 
+        info_lines = Vec::with_capacity(DISPLAY_HEIGHT);
+
         // If debugging: wait for user input to continue
-        // let mut buf = String::new();
-        // io::stdin().read_line(&mut buf).unwrap();
+        if is_debug {
+            let mut line = String::new();
+            io::stdin().read_line(&mut line).unwrap();
+
+            // Remove escapes
+            line = line.replace(['\x1b'], "");
+
+            if ["q", "quit", "exit"].contains(&line.trim()) {
+                is_debug = false;
+            }
+        }
 
         // Misc logging
         n_instructions_executed += 1;
@@ -180,7 +276,7 @@ fn invalid_instruction(instruction: u16) -> ! {
     panic!("Invalid instruction at {:#x}: {:#x}", get_i(), instruction);
 }
 
-fn decode(ins: u16) -> Instruction {
+pub fn decode(ins: u16) -> Option<Instruction> {
     let first = ((ins & 0xF000) >> 12) as u8;
     let second = ((ins & 0x0F00) >> 8) as u8;
     let third = ((ins & 0x00F0) >> 4) as u8;
@@ -190,62 +286,68 @@ fn decode(ins: u16) -> Instruction {
         0x0 => match second {
             0x0 => match third {
                 0xE => match fourth {
-                    0xE => Instruction::SubroutineReturn,
-                    0x0 => Instruction::Clear,
-                    _ => invalid_instruction(ins),
+                    0xE => Some(Instruction::SubroutineReturn),
+                    0x0 => Some(Instruction::Clear),
+                    _ => None,
                 },
-                _ => invalid_instruction(ins),
+                _ => None,
             },
-            _ => invalid_instruction(ins),
+            _ => None,
         },
-        0x1 => Instruction::Jump(ins & 0x0FFF),
-        0x2 => Instruction::SubroutineCall(ins & 0x0FFF),
-        0x3 => Instruction::SkipConditional1(second.into(), (ins & 0x00FF) as u8),
-        0x4 => Instruction::SkipConditional2(second.into(), (ins & 0x00FF) as u8),
+        0x1 => Some(Instruction::Jump(ins & 0x0FFF)),
+        0x2 => Some(Instruction::SubroutineCall(ins & 0x0FFF)),
+        0x3 => Some(Instruction::SkipConditional1(
+            second.into(),
+            (ins & 0x00FF) as u8,
+        )),
+        0x4 => Some(Instruction::SkipConditional2(
+            second.into(),
+            (ins & 0x00FF) as u8,
+        )),
         0x5 => match fourth {
-            0 => Instruction::SkipConditional3(second.into(), third.into()),
-            _ => invalid_instruction(ins),
+            0 => Some(Instruction::SkipConditional3(second.into(), third.into())),
+            _ => None,
         },
-        0x6 => Instruction::SetRegister(second.into(), (ins & 0xff) as u8),
-        0x7 => Instruction::Add(second.into(), (ins & 0x00FF) as u8),
+        0x6 => Some(Instruction::SetRegister(second.into(), (ins & 0xff) as u8)),
+        0x7 => Some(Instruction::Add(second.into(), (ins & 0x00FF) as u8)),
         0x8 => match fourth {
-            0 => Instruction::RegSet(second.into(), third.into()),
-            1 => Instruction::BinaryOr(second.into(), third.into()),
-            2 => Instruction::BinaryAnd(second.into(), third.into()),
-            3 => Instruction::BinaryXor(second.into(), third.into()),
-            4 => Instruction::RegAdd(second.into(), third.into()),
-            5 => Instruction::Subtract1(second.into(), third.into()),
-            6 => Instruction::ShiftRight(second.into(), third.into()),
-            7 => Instruction::Subtract2(second.into(), third.into()),
-            0xE => Instruction::ShiftLeft(second.into(), third.into()),
-            _ => invalid_instruction(ins),
+            0 => Some(Instruction::RegSet(second.into(), third.into())),
+            1 => Some(Instruction::BinaryOr(second.into(), third.into())),
+            2 => Some(Instruction::BinaryAnd(second.into(), third.into())),
+            3 => Some(Instruction::BinaryXor(second.into(), third.into())),
+            4 => Some(Instruction::RegAdd(second.into(), third.into())),
+            5 => Some(Instruction::Subtract1(second.into(), third.into())),
+            6 => Some(Instruction::ShiftRight(second.into(), third.into())),
+            7 => Some(Instruction::Subtract2(second.into(), third.into())),
+            0xE => Some(Instruction::ShiftLeft(second.into(), third.into())),
+            _ => None,
         },
         0x9 => match fourth {
-            0 => Instruction::SkipConditional4(second.into(), third.into()),
-            _ => invalid_instruction(ins),
+            0 => Some(Instruction::SkipConditional4(second.into(), third.into())),
+            _ => None,
         },
-        0xA => Instruction::SetIndexRegister(ins & 0xFFF),
-        0xB => Instruction::JumpOffset(ins & 0xFFF),
-        0xC => Instruction::Random(second.into(), (ins & 0x00FF) as u8),
-        0xD => Instruction::Draw(second.into(), third.into(), fourth),
+        0xA => Some(Instruction::SetIndexRegister(ins & 0xFFF)),
+        0xB => Some(Instruction::JumpOffset(ins & 0xFFF)),
+        0xC => Some(Instruction::Random(second.into(), (ins & 0x00FF) as u8)),
+        0xD => Some(Instruction::Draw(second.into(), third.into(), fourth)),
         0xE => match ins & 0x00FF {
-            0x9E => Instruction::SkipIfKey(second.into()),
-            0xA1 => Instruction::SkipIfNotKey(second.into()),
-            _ => invalid_instruction(ins),
+            0x9E => Some(Instruction::SkipIfKey(second.into())),
+            0xA1 => Some(Instruction::SkipIfNotKey(second.into())),
+            _ => None,
         },
         0xF => match ins & 0x00FF {
-            0x07 => Instruction::GetDelayTimer(second.into()),
-            0x0A => Instruction::GetKey(second.into()),
-            0x15 => Instruction::SetDelayTimer(second.into()),
-            0x18 => Instruction::SetSoundTimer(second.into()),
-            0x1E => Instruction::AddToIndex(second.into()),
-            0x29 => Instruction::FontCharacter(second.into()),
-            0x33 => Instruction::BCD(second.into()),
-            0x55 => Instruction::StoreMemory(second),
-            0x65 => Instruction::LoadMemory(second),
-            _ => invalid_instruction(ins),
+            0x07 => Some(Instruction::GetDelayTimer(second.into())),
+            0x0A => Some(Instruction::GetKey(second.into())),
+            0x15 => Some(Instruction::SetDelayTimer(second.into())),
+            0x18 => Some(Instruction::SetSoundTimer(second.into())),
+            0x1E => Some(Instruction::AddToIndex(second.into())),
+            0x29 => Some(Instruction::FontCharacter(second.into())),
+            0x33 => Some(Instruction::BCD(second.into())),
+            0x55 => Some(Instruction::StoreMemory(second)),
+            0x65 => Some(Instruction::LoadMemory(second)),
+            _ => None,
         },
-        _ => invalid_instruction(ins),
+        _ => None,
     }
 }
 

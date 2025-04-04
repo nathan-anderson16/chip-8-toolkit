@@ -1,5 +1,8 @@
 use core::panic;
-use std::sync::{LazyLock, Mutex};
+use std::{
+    fmt::Display,
+    sync::{LazyLock, Mutex},
+};
 
 /// Creates getters and setters for the given value.
 #[macro_export]
@@ -196,7 +199,34 @@ impl From<u8> for Register {
     }
 }
 
+impl Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::V0 => f.write_str("V0"),
+            Self::V1 => f.write_str("V1"),
+            Self::V2 => f.write_str("V2"),
+            Self::V3 => f.write_str("V3"),
+            Self::V4 => f.write_str("V4"),
+            Self::V5 => f.write_str("V5"),
+            Self::V6 => f.write_str("V6"),
+            Self::V7 => f.write_str("V7"),
+            Self::V8 => f.write_str("V8"),
+            Self::V9 => f.write_str("V9"),
+            Self::VA => f.write_str("VA"),
+            Self::VB => f.write_str("VB"),
+            Self::VC => f.write_str("VC"),
+            Self::VD => f.write_str("VD"),
+            Self::VE => f.write_str("VE"),
+            Self::VF => f.write_str("VF"),
+        }
+    }
+}
+
 pub static mut REGISTERS: [u8; 16] = [0u8; 16];
+
+pub fn get_registers() -> [u8; 16] {
+    unsafe { REGISTERS }
+}
 
 pub fn get_register(reg: Register) -> u8 {
     unsafe { REGISTERS[reg as usize] }
