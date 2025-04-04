@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    run::{REVERSE_KEYPRESS_MAP, decode},
+    decode::decode,
+    run::REVERSE_KEYPRESS_MAP,
     system::{Register, get_memory_u16, get_register},
 };
 

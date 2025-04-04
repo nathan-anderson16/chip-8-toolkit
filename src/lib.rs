@@ -1,3 +1,6 @@
+pub mod debug_terminal;
+pub mod decode;
+pub mod execute;
 pub mod init;
 pub mod instructions;
 pub mod run;
