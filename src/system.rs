@@ -63,6 +63,11 @@ pub fn get_display(x: u8, y: u8) -> bool {
     unsafe { DISPLAY[x as usize][y as usize] }
 }
 
+/// Returns the full display.
+pub fn get_full_display() -> [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH] {
+    unsafe { DISPLAY }
+}
+
 /// Sets the display to the given value at the given position.
 pub fn set_display(x: u8, y: u8, val: bool) {
     assert!(

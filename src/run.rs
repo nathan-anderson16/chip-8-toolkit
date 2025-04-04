@@ -13,10 +13,10 @@ use crate::{
     instructions::Instruction,
     system::{
         DISPLAY_HEIGHT, DISPLAY_WIDTH, Register, decrement_delay_timer, decrement_sound_timer,
-        get_delay_timer, get_display, get_i, get_memory_u8, get_memory_u16, get_pc, get_register,
-        get_registers, get_sound_timer, get_stack, set_delay_timer, set_display, set_i,
-        set_memory_u8, set_memory_u16, set_pc, set_register, set_sound_timer, stack_pop,
-        stack_push,
+        get_delay_timer, get_display, get_full_display, get_i, get_memory_u8, get_memory_u16,
+        get_pc, get_register, get_registers, get_sound_timer, get_stack, set_delay_timer,
+        set_display, set_i, set_memory_u8, set_memory_u16, set_pc, set_register, set_sound_timer,
+        stack_pop, stack_push,
     },
 };
 
@@ -99,6 +99,8 @@ pub fn run() {
     let mut old_i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
     // The last 3 instructions
     let mut last_instructions: VecDeque<(u16, u16, Instruction)> = VecDeque::with_capacity(3);
+    // The last state of the display
+    let mut old_display_state = get_full_display();
 
     loop {
         // Update keyboard state
@@ -241,6 +243,7 @@ pub fn run() {
         }
 
         old_register_state = get_registers();
+        old_display_state = get_full_display();
         old_i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
 
         if last_instructions.len() == 3 {
@@ -283,9 +286,18 @@ pub fn run() {
             println!();
             for y in 0..DISPLAY_HEIGHT {
                 print!("|");
-                for x in 0..DISPLAY_WIDTH {
+                for (x, old_row) in old_display_state.iter().enumerate() {
                     let is_set = get_display(x as u8, y as u8);
-                    print!("{}", if is_set { "\x1b[47m  \x1b[0m" } else { "  " });
+                    let is_old_set = old_row[y];
+                    if is_set && is_old_set {
+                        print!("\x1b[47m  \x1b[0m");
+                    } else if is_set && !is_old_set {
+                        print!("\x1b[42m  \x1b[0m");
+                    } else if !is_set && is_old_set {
+                        print!("\x1b[41m  \x1b[0m");
+                    } else {
+                        print!("  ");
+                    }
                 }
                 print!("|");
                 if is_debug && y < info_lines.len() {
