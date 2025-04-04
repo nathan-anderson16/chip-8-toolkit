@@ -12,9 +12,9 @@ use device_query::{DeviceQuery, DeviceState, Keycode};
 use crate::{
     instructions::Instruction,
     system::{
-        DISPLAY_HEIGHT, DISPLAY_WIDTH, REGISTERS, Register, decrement_delay_timer,
-        decrement_sound_timer, get_delay_timer, get_display, get_i, get_memory_u8, get_memory_u16,
-        get_pc, get_register, get_registers, get_sound_timer, set_delay_timer, set_display, set_i,
+        DISPLAY_HEIGHT, DISPLAY_WIDTH, Register, decrement_delay_timer, decrement_sound_timer,
+        get_delay_timer, get_display, get_i, get_memory_u8, get_memory_u16, get_pc, get_register,
+        get_registers, get_sound_timer, get_stack, set_delay_timer, set_display, set_i,
         set_memory_u8, set_memory_u16, set_pc, set_register, set_sound_timer, stack_pop,
         stack_push,
     },
@@ -96,6 +96,7 @@ pub fn run() {
     let mut info_lines: Vec<String> = Vec::with_capacity(DISPLAY_HEIGHT);
     // Detecting changes in register state
     let mut old_register_state = get_registers();
+    let mut old_i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
     // The last 3 instructions
     let mut last_instructions: VecDeque<(u16, u16, Instruction)> = VecDeque::with_capacity(3);
 
@@ -117,7 +118,8 @@ pub fn run() {
             };
         }
 
-        macro_rules! infonnl {
+        /// Info, but appends to the previous line.
+        macro_rules! infop {
             ($($arg:tt)*) => {
                 let n_lines = info_lines.len() - 1;
                 info_lines[n_lines].push_str(format!($($arg)*).as_str());
@@ -146,47 +148,100 @@ pub fn run() {
                 }
             }
 
-            info!("-----------");
-            info!("INSTRUCTION");
-            info!("-----------");
+            info!("|---------------------INSTRUCTIONS-----------------------");
+            // Previous instructions
             for instruction in last_instructions.iter().rev() {
                 info!(
-                    "\x1b[2;37m{:#06x}: {:#04x} -> {:?}\x1b[0m",
+                    "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
                     instruction.0, instruction.1, instruction.2
                 );
             }
+            // Current instruction
             info!(
-                "\x1b[32m{:#06x}: {:#04x} -> {:?}\x1b[0m",
+                "| \x1b[32m{:#06X}: {:#04X} -> {:?}\x1b[0m",
                 get_pc() - 2,
                 instruction_raw,
                 instruction
             );
-            // Register values
-            info!("-----------");
-            info!(" REGISTERS ");
-            info!("-----------");
-            for (i, old_reg) in old_register_state.iter().enumerate() {
-                let reg = get_register((i as u8).into());
-                info!("V{:x} | {:#04x}", i, reg);
-                if *old_reg != reg {
-                    infonnl!(" \x1b[2;37m<- {:#04x}\x1b[0m", old_reg);
+            // Next instruction
+            let (mut next_instruction, mut next_addr) = (Some(instruction), get_pc() - 2);
+            for _ in 0..3 {
+                (next_instruction, next_addr) = predict_instruction(next_addr);
+                if let Some(ins) = next_instruction {
+                    info!(
+                        "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+                        next_addr,
+                        get_memory_u16(next_addr),
+                        ins
+                    );
+                } else {
+                    info!(
+                        "| \x1b[2;37m{:#06X}: {:#04X} -> (invalid)\x1b[0m",
+                        next_addr,
+                        get_memory_u16(next_addr)
+                    );
                 }
             }
-            info!();
-            info!("---------");
-            info!("  TIMER  ");
-            info!("---------");
-            // Current instruction
-            // Current value of PC
-            // Next instruction (if current instruction is jump, show the instruction at the address to jump to)
-            // Current value of I
-            // Value of address pointed to by I
-            // Stack
-            // Delay timer
-            // Sound timer
+
+            // Registers + stack
+            let stack = get_stack();
+            info!(
+                "|-----REGISTERS-----|----STACK({:X})----|------TIMERS------|",
+                stack.len()
+            );
+            for (i, old_reg) in old_register_state.iter().enumerate() {
+                // Register
+                let reg = get_register((i as u8).into());
+
+                if *old_reg != reg {
+                    // Register changed
+                    info!(
+                        "| \x1b[32mV{:X}: {:#04X}   \x1b[2;37m{:#04X}\x1b[0m   |",
+                        i, reg, old_reg
+                    );
+                } else {
+                    // Register did not change
+                    info!("| V{:X}: {:#04X}          |", i, reg);
+                }
+
+                // Stack
+                if i < stack.len() {
+                    // Stack contains an entry
+                    infop!("     {:#06X}     |", stack[i]);
+                } else {
+                    // Stack does not contain an entry
+                    infop!("                |");
+                }
+
+                // Delay timer
+                if i == 0 {
+                    infop!("   DELAY   {:#04X}   |", get_delay_timer());
+                } else if i == 1 {
+                    infop!("   SOUND   {:#04X}   |", get_sound_timer());
+                } else {
+                    infop!("                  |");
+                }
+            }
+            info!("|-------------------|----------------|------------------|");
+            // I
+            let i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
+            if old_i_state != i_state {
+                info!(
+                    "| \x1b[32mI: {:#06X} -> {:#04X} {:#04X}  \x1b[2;37m{:#06X} -> {:#04X} {:#04X}\x1b[0m           |",
+                    i_state.0, i_state.1, i_state.2, old_i_state.0, old_i_state.1, old_i_state.2
+                );
+            } else {
+                info!(
+                    "| I: {:#06X} -> {:#04X} {:#04X}                                |",
+                    i_state.0, i_state.1, i_state.2
+                );
+            }
+            info!("|-------------------------------------------------------|");
+            // TODO: Next instruction (if current instruction is jump, show the instruction at the address to jump to)
         }
 
         old_register_state = get_registers();
+        old_i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
 
         if last_instructions.len() == 3 {
             last_instructions.pop_back();
@@ -254,13 +309,30 @@ pub fn run() {
             // Remove escapes
             line = line.replace(['\x1b'], "");
 
-            if ["q", "quit", "exit"].contains(&line.trim()) {
+            if ["c", "continue"].contains(&line.trim()) {
                 is_debug = false;
             }
         }
 
         // Misc logging
         n_instructions_executed += 1;
+    }
+}
+
+/// Given an instruction, predict the next instruction and its address.
+/// This is not always accurate.
+fn predict_instruction(addr: u16) -> (Option<Instruction>, u16) {
+    let Some(ins) = decode(get_memory_u16(addr)) else {
+        return (None, addr + 2);
+    };
+    match ins {
+        Instruction::Jump(nnn) => (decode(get_memory_u16(nnn)), nnn),
+        Instruction::JumpOffset(nnn) => (
+            decode(get_memory_u16(get_register(Register::V0) as u16 + nnn)),
+            nnn,
+        ),
+        Instruction::SubroutineCall(nnn) => (decode(get_memory_u16(nnn)), nnn),
+        _ => (decode(get_memory_u16(addr + 2)), addr + 2),
     }
 }
 

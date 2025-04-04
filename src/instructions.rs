@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    run::decode,
+    run::{REVERSE_KEYPRESS_MAP, decode},
     system::{Register, get_memory_u16, get_register},
 };
 
@@ -98,20 +98,20 @@ impl Debug for Instruction {
                 let instruction_raw = get_memory_u16(nnn);
                 let instruction = decode(instruction_raw);
                 if let Some(ins) = instruction {
-                    f.write_str(format!("Jump({:#06x} -> {:?})", nnn, ins).as_str())
+                    f.write_str(format!("Jump({:#06X}) -> {:?}", nnn, ins).as_str())
                 } else {
-                    f.write_str(format!("Jump({:#06x} -> (invalid))", nnn,).as_str())
+                    f.write_str(format!("Jump({:#06X}) -> (invalid)", nnn,).as_str())
                 }
             }
             Self::SubroutineCall(nnn) => {
-                f.write_str(format!("SubroutineCall({:#06x})", nnn).as_str())
+                f.write_str(format!("SubroutineCall({:#06X})", nnn).as_str())
             }
             Self::SkipConditional1(vx, nn) => f.write_str(
-                format!("SkipEqual({vx} -> {:#04x}, {:#04x})", get_register(vx), nn).as_str(),
+                format!("SkipEqual({vx} -> {:#04X}, {:#04X})", get_register(vx), nn).as_str(),
             ),
             Self::SkipConditional2(vx, nn) => f.write_str(
                 format!(
-                    "SkipNotEqual({vx} -> {:#04x}, {:#04x})",
+                    "SkipNotEqual({vx} -> {:#04X}, {:#04X})",
                     get_register(vx),
                     nn
                 )
@@ -119,29 +119,29 @@ impl Debug for Instruction {
             ),
             Self::SkipConditional3(vx, vy) => f.write_str(
                 format!(
-                    "SkipEqual({vx} -> {:#04x}, {vy} -> {:#04x})",
+                    "SkipEqual({vx} -> {:#04X}, {vy} -> {:#04X})",
                     get_register(vx),
                     get_register(vy)
                 )
                 .as_str(),
             ),
             Self::SetRegister(vx, nn) => {
-                f.write_str(format!("SetRegister({vx}, {:#04x})", nn).as_str())
+                f.write_str(format!("SetRegister({vx}, {:#04X})", nn).as_str())
             }
             Self::Add(vx, nn) => f.write_str(
                 format!(
-                    "SetRegister({vx} -> {:#04x}, {:#04x})",
+                    "SetRegister({vx} -> {:#04X}, {:#04X})",
                     get_register(vx),
                     nn
                 )
                 .as_str(),
             ),
             Self::RegSet(vx, vy) => f.write_str(
-                format!("SetRegister({vx}, {vy} -> {:#04x})", get_register(vy)).as_str(),
+                format!("SetRegister({vx}, {vy} -> {:#04X})", get_register(vy)).as_str(),
             ),
             Self::BinaryOr(vx, vy) => f.write_str(
                 format!(
-                    "BinaryOr({vx} -> {:#04x}, {vy} -> {:#04x})",
+                    "BinaryOr({vx} -> {:#04X}, {vy} -> {:#04X})",
                     get_register(vx),
                     get_register(vy)
                 )
@@ -149,13 +149,123 @@ impl Debug for Instruction {
             ),
             Self::BinaryAnd(vx, vy) => f.write_str(
                 format!(
-                    "BinaryAnd({vx} -> {:#04x}, {vy} -> {:#04x})",
+                    "BinaryAnd({vx} -> {:#04X}, {vy} -> {:#04X})",
                     get_register(vx),
                     get_register(vy)
                 )
                 .as_str(),
             ),
-            _ => f.write_str("TODO"),
+            Self::BinaryXor(vx, vy) => f.write_str(
+                format!(
+                    "BinaryXor({vx} -> {:#04X}, {vy} -> {:#04X})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::RegAdd(vx, vy) => f.write_str(
+                format!(
+                    "Add({vx} -> {:#04X}, {vy} -> {:#04X})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::Subtract1(vx, vy) => f.write_str(
+                format!(
+                    "Subtract({vx} -> {:#04X}, {vy} -> {:#04X}) ({vx} - {vy})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::ShiftRight(vx, vy) => f.write_str(
+                format!(
+                    "ShiftRight({vx} -> {:#04X}, {vy} -> {:#04X})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::Subtract2(vx, vy) => f.write_str(
+                format!(
+                    "Subtract({vx} -> {:#04X}, {vy} -> {:#04X}) ({vy} - {vx})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::ShiftLeft(vx, vy) => f.write_str(
+                format!(
+                    "ShiftLeft({vx} -> {:#04X}, {vy} -> {:#04X})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::SkipConditional4(vx, vy) => f.write_str(
+                format!(
+                    "SkipNotEqual({vx} -> {:#04X}, {vy} -> {:#04X})",
+                    get_register(vx),
+                    get_register(vy)
+                )
+                .as_str(),
+            ),
+            Self::SetIndexRegister(nnn) => f.write_str(format!("SetI({:#06X})", nnn).as_str()),
+            Self::JumpOffset(nnn) => f.write_str(format!("JumpOffset({:#06X})", nnn).as_str()),
+            Self::Random(vx, nn) => f.write_str(format!("Random({vx}, {:#04X})", nn).as_str()),
+            Self::Draw(vx, vy, n) => f.write_str(
+                format!(
+                    "Draw({vx} -> {:#04X}, {vy} -> {:#04X}, {:#04X})",
+                    get_register(vx),
+                    get_register(vy),
+                    n
+                )
+                .as_str(),
+            ),
+            Self::SkipIfKey(vx) => f.write_str(
+                format!(
+                    "SkipIfKey({vx} -> {:#04X} ({:?}))",
+                    get_register(vx),
+                    REVERSE_KEYPRESS_MAP
+                        .get()
+                        .unwrap()
+                        .get(&get_register(vx))
+                        .unwrap()
+                )
+                .as_str(),
+            ),
+            Self::SkipIfNotKey(vx) => f.write_str(
+                format!(
+                    "SkipIfNotKey({vx} -> {:#04X} ({:?}))",
+                    get_register(vx),
+                    REVERSE_KEYPRESS_MAP
+                        .get()
+                        .unwrap()
+                        .get(&get_register(vx))
+                        .unwrap()
+                )
+                .as_str(),
+            ),
+            Self::GetDelayTimer(vx) => f.write_str(format!("GetDelayTimer({vx})").as_str()),
+            Self::GetKey(vx) => f.write_str(format!("GetKey({vx})").as_str()),
+            Self::SetDelayTimer(vx) => {
+                f.write_str(format!("SetDelayTimer({vx} -> {:#04X})", get_register(vx)).as_str())
+            }
+            Self::SetSoundTimer(vx) => {
+                f.write_str(format!("SetSoundTimer({vx} -> {:#04X})", get_register(vx)).as_str())
+            }
+            Self::AddToIndex(vx) => {
+                f.write_str(format!("AddToI({vx} -> {:#04X})", get_register(vx)).as_str())
+            }
+            Self::FontCharacter(vx) => {
+                f.write_str(format!("FontAddress({vx} -> {:#04X})", get_register(vx)).as_str())
+            }
+            Self::BCD(vx) => f.write_str(
+                format!("BinaryCodedDecimal({vx} -> {:#04X})", get_register(vx)).as_str(),
+            ),
+            Self::StoreMemory(n) => f.write_str(format!("StoreMemory({n})").as_str()),
+            Self::LoadMemory(n) => f.write_str(format!("LoadMemory({n})").as_str()),
         }
     }
 }

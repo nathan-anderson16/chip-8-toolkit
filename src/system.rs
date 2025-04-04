@@ -103,7 +103,7 @@ pub fn set_i(val: u16) {
     unsafe { I = val };
 }
 
-pub const STACK_SIZE: usize = 1024;
+pub const STACK_SIZE: usize = 16;
 
 /// The stack. Contains 16-bit addresses. Used for calling and returning from functions.
 pub static mut STACK: LazyLock<Mutex<Vec<u16>>> =
@@ -120,6 +120,13 @@ pub fn stack_pop() -> Option<u16> {
     #[allow(static_mut_refs)]
     unsafe {
         STACK.lock().unwrap().pop()
+    }
+}
+
+pub fn get_stack() -> Vec<u16> {
+    #[allow(static_mut_refs)]
+    unsafe {
+        STACK.lock().unwrap().clone()
     }
 }
 
