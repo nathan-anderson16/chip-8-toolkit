@@ -1,7 +1,7 @@
 use core::panic;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    io,
+    io::{self, Write},
     sync::OnceLock,
     thread,
     time::{Duration, SystemTime},
@@ -42,6 +42,8 @@ pub fn run() {
 
     // Whether we are currently debugging.
     let mut is_debug = false;
+    // The last command that was used in the debugger
+    let mut last_debug_command = String::new();
 
     KEYPRESS_MAP.get_or_init(|| {
         // 1 2 3 C
@@ -272,7 +274,7 @@ pub fn run() {
         // Only draw at ~60FPS
         if n_instructions_executed % 12 == 0 || is_debug {
             // Clear the terminal
-            for _ in 0..DISPLAY_HEIGHT + 3 {
+            for _ in 0..DISPLAY_HEIGHT + 5 {
                 print!("\x1b[2K\x1b[1A\r"); // Clear the line, then move the cursor up a line
             }
             print!("\x1b[2K\r"); // Clear the last line
@@ -306,7 +308,11 @@ pub fn run() {
                 println!();
             }
             println!("|{}|", (0..DISPLAY_WIDTH).map(|_| "__").collect::<String>());
-            if !is_debug {
+            println!();
+            if is_debug {
+                println!("Welcome to the debug terminal! h: help, c: continue");
+            } else {
+                println!();
                 println!();
             }
         }
@@ -315,19 +321,65 @@ pub fn run() {
 
         // If debugging: wait for user input to continue
         if is_debug {
-            let mut line = String::new();
-            io::stdin().read_line(&mut line).unwrap();
-
-            // Remove escapes
-            line = line.replace(['\x1b'], "");
-
-            if ["c", "continue"].contains(&line.trim()) {
-                is_debug = false;
-            }
+            is_debug = debug_terminal(&mut last_debug_command);
         }
 
         // Misc logging
         n_instructions_executed += 1;
+    }
+}
+
+/// Handles the debug terminal, and returns whether debug mode should stay enabled.
+fn debug_terminal(last_debug_command: &mut String) -> bool {
+    loop {
+        println!("> ");
+        print!("\x1b[1A\x1b[2C");
+        io::stdout().flush().unwrap();
+
+        let mut line = String::new();
+        io::stdin().read_line(&mut line).unwrap();
+
+        // Remove escapes
+        line = line.replace(['\x1b'], "");
+
+        if line.trim() == "" {
+            line = last_debug_command.clone();
+        }
+        match line.trim() {
+            // Print help
+            "h" | "help" => {
+                println!("h, help        Print this message");
+                println!("c, continue    Exit debug mode and continue program execution");
+                println!("n, next        Execute the next instruction");
+            }
+            // Continue program execution
+            "c" | "continue" => {
+                for _ in 0..DISPLAY_HEIGHT + 5 {
+                    println!();
+                }
+                last_debug_command.clear();
+                return false;
+            }
+            // Next instruction
+            "n" | "next" => {
+                for _ in 0..DISPLAY_HEIGHT + 5 {
+                    println!();
+                }
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                return true;
+            }
+            "j" | "jump" => {
+                println!("test");
+                last_debug_command.clear();
+            }
+            // Unknown instruction or blank line
+            _ => {
+                if line.trim() != "" {
+                    println!("Unknown command: {}", line.trim());
+                }
+            }
+        };
     }
 }
 
