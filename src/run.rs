@@ -26,6 +26,23 @@ pub const INSTRUCTION_SPEED: usize = 720;
 pub static KEYPRESS_MAP: OnceLock<HashMap<Keycode, u8>> = OnceLock::new();
 pub static REVERSE_KEYPRESS_MAP: OnceLock<HashMap<u8, Keycode>> = OnceLock::new();
 
+macro_rules! info {
+    () => {
+        info_lines.push(String::new());
+    };
+    ($lines:tt, $($arg:tt)*) => {
+        $lines.push(format!($($arg)*));
+    };
+}
+
+/// Info, but appends to the previous line.
+macro_rules! infop {
+    ($lines:tt, $($arg:tt)*) => {
+        let n_lines = $lines.len() - 1;
+        $lines[n_lines].push_str(format!($($arg)*).as_str());
+    };
+}
+
 /// Handles the core loop.
 pub fn run() {
     for _ in 0..DISPLAY_HEIGHT {
@@ -102,32 +119,17 @@ pub fn run() {
     // The last 3 instructions
     let mut last_instructions: VecDeque<(u16, u16, Instruction)> = VecDeque::with_capacity(3);
     // The last state of the display
-    let mut old_display_state = get_full_display();
+    let mut old_display_state: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH];
 
     loop {
+        info_lines.clear();
+
         // Update keyboard state
         let keys = device_state.get_keys();
         last_pressed_keys = pressed_keys.clone();
         pressed_keys.clear();
         for key in keys {
             pressed_keys.insert(key);
-        }
-
-        macro_rules! info {
-            () => {
-                info_lines.push(String::new());
-            };
-            ($($arg:tt)*) => {
-                info_lines.push(format!($($arg)*));
-            };
-        }
-
-        /// Info, but appends to the previous line.
-        macro_rules! infop {
-            ($($arg:tt)*) => {
-                let n_lines = info_lines.len() - 1;
-                info_lines[n_lines].push_str(format!($($arg)*).as_str());
-            };
         }
 
         if pressed_keys.contains(&Keycode::Escape) {
@@ -143,105 +145,17 @@ pub fn run() {
             invalid_instruction(instruction_raw);
         };
 
-        // If debugging, set debug info
+        // If debugging, print debug info
         if is_debug {
-            // If the current instruction is draw, skip to the next vertical blank
-            if let Instruction::Draw(_, _, _) = instruction {
-                while n_instructions_executed % 12 != 1 {
-                    n_instructions_executed += 1;
-                }
-            }
-
-            info!("|---------------------INSTRUCTIONS-----------------------");
-            // Previous instructions
-            for instruction in last_instructions.iter().rev() {
-                info!(
-                    "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
-                    instruction.0, instruction.1, instruction.2
-                );
-            }
-            // Current instruction
-            info!(
-                "| \x1b[32m{:#06X}: {:#04X} -> {:?}\x1b[0m",
-                get_pc() - 2,
+            print_debug(
+                &mut n_instructions_executed,
+                instruction,
                 instruction_raw,
-                instruction
+                &last_instructions,
+                &mut info_lines,
+                old_register_state,
+                old_i_state,
             );
-            // Next instruction
-            let (mut next_instruction, mut next_addr) = (Some(instruction), get_pc() - 2);
-            for _ in 0..3 {
-                (next_instruction, next_addr) = predict_instruction(next_addr);
-                if let Some(ins) = next_instruction {
-                    info!(
-                        "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
-                        next_addr,
-                        get_memory_u16(next_addr),
-                        ins
-                    );
-                } else {
-                    info!(
-                        "| \x1b[2;37m{:#06X}: {:#04X} -> (invalid)\x1b[0m",
-                        next_addr,
-                        get_memory_u16(next_addr)
-                    );
-                }
-            }
-
-            // Registers + stack
-            let stack = get_stack();
-            info!(
-                "|-----REGISTERS-----|----STACK({:X})----|------TIMERS------|",
-                stack.len()
-            );
-            for (i, old_reg) in old_register_state.iter().enumerate() {
-                // Register
-                let reg = get_register((i as u8).into());
-
-                if *old_reg != reg {
-                    // Register changed
-                    info!(
-                        "| \x1b[32mV{:X}: {:#04X}   \x1b[2;37m{:#04X}\x1b[0m   |",
-                        i, reg, old_reg
-                    );
-                } else {
-                    // Register did not change
-                    info!("| V{:X}: {:#04X}          |", i, reg);
-                }
-
-                // Stack
-                if i < stack.len() {
-                    // Stack contains an entry
-                    infop!("     {:#06X}     |", stack[i]);
-                } else {
-                    // Stack does not contain an entry
-                    infop!("                |");
-                }
-
-                // Delay timer
-                if i == 0 {
-                    infop!("   DELAY   {:#04X}   |", get_delay_timer());
-                } else if i == 1 {
-                    infop!("   SOUND   {:#04X}   |", get_sound_timer());
-                } else {
-                    infop!("                  |");
-                }
-            }
-            info!("|-------------------|----------------|------------------|");
-            // I
-            let i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
-            if old_i_state != i_state {
-                info!(
-                    "| \x1b[32mI: {:#06X} -> {:#04X} {:#04X}  \x1b[2;37m{:#06X} -> {:#04X} {:#04X}\x1b[0m           |",
-                    i_state.0, i_state.1, i_state.2, old_i_state.0, old_i_state.1, old_i_state.2
-                );
-            } else {
-                info!(
-                    "| I: {:#06X} -> {:#04X} {:#04X}                                |",
-                    i_state.0, i_state.1, i_state.2
-                );
-            }
-            info!("|-------------------------------------------------------|");
-            // TODO: Next instruction (if current instruction is jump, show the instruction at the address to jump to)
         }
 
         old_register_state = get_registers();
@@ -271,57 +185,26 @@ pub fn run() {
         thread::sleep(Duration::from_secs_f32(1.0 / INSTRUCTION_SPEED as f32));
 
         // Draw
-        // Only draw at ~60FPS
-        if n_instructions_executed % 12 == 0 || is_debug {
-            // Clear the terminal
-            for _ in 0..DISPLAY_HEIGHT + 5 {
-                print!("\x1b[2K\x1b[1A\r"); // Clear the line, then move the cursor up a line
-            }
-            print!("\x1b[2K\r"); // Clear the last line
-
-            print!("{}", (0..=DISPLAY_WIDTH).map(|_| "__").collect::<String>());
-            // Show a colored square to indicate sound
-            if get_sound_timer() > 0 && n_instructions_executed % 12 == 0 {
-                print!(" \x1b[43m  \x1b[0m");
-            }
-
-            println!();
-            for y in 0..DISPLAY_HEIGHT {
-                print!("|");
-                for (x, old_row) in old_display_state.iter().enumerate() {
-                    let is_set = get_display(x as u8, y as u8);
-                    let is_old_set = old_row[y];
-                    if is_set && is_old_set {
-                        print!("\x1b[47m  \x1b[0m");
-                    } else if is_set && !is_old_set {
-                        print!("\x1b[42m  \x1b[0m");
-                    } else if !is_set && is_old_set {
-                        print!("\x1b[41m  \x1b[0m");
-                    } else {
-                        print!("  ");
-                    }
-                }
-                print!("|");
-                if is_debug && y < info_lines.len() {
-                    print!(" {}", info_lines[y]);
-                }
-                println!();
-            }
-            println!("|{}|", (0..DISPLAY_WIDTH).map(|_| "__").collect::<String>());
-            println!();
-            if is_debug {
-                println!("Welcome to the debug terminal! h: help, c: continue");
-            } else {
-                println!();
-                println!();
-            }
-        }
-
-        info_lines = Vec::with_capacity(DISPLAY_HEIGHT);
+        draw(
+            n_instructions_executed,
+            is_debug,
+            &old_display_state,
+            &mut info_lines,
+        );
 
         // If debugging: wait for user input to continue
         if is_debug {
-            is_debug = debug_terminal(&mut last_debug_command);
+            is_debug = debug_terminal(
+                &mut last_debug_command,
+                &mut n_instructions_executed,
+                instruction,
+                instruction_raw,
+                &last_instructions,
+                &mut info_lines,
+                old_register_state,
+                old_i_state,
+                &old_display_state,
+            );
         }
 
         // Misc logging
@@ -329,8 +212,205 @@ pub fn run() {
     }
 }
 
+fn draw(
+    n_instructions_executed: u128,
+    is_debug: bool,
+    old_display_state: &[[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
+    info_lines: &mut [String],
+) {
+    // Only draw at ~60FPS
+    if n_instructions_executed % 12 == 0 || is_debug {
+        // Clear the terminal
+        for _ in 0..DISPLAY_HEIGHT + 5 {
+            print!("\x1b[2K\x1b[1A\r"); // Clear the line, then move the cursor up a line
+        }
+        print!("\x1b[2K\r"); // Clear the last line
+
+        print!("{}", (0..=DISPLAY_WIDTH).map(|_| "__").collect::<String>());
+        // Show a colored square to indicate sound
+        if get_sound_timer() > 0 && n_instructions_executed % 12 == 0 {
+            print!(" \x1b[43m  \x1b[0m");
+        }
+
+        println!();
+        for y in 0..DISPLAY_HEIGHT {
+            print!("|");
+            for (x, old_row) in old_display_state.iter().enumerate() {
+                let is_set = get_display(x as u8, y as u8);
+                let is_old_set = old_row[y];
+                if is_set && is_old_set {
+                    print!("\x1b[47m  \x1b[0m");
+                } else if is_set && !is_old_set {
+                    print!("\x1b[42m  \x1b[0m");
+                } else if !is_set && is_old_set {
+                    print!("\x1b[41m  \x1b[0m");
+                } else {
+                    print!("  ");
+                }
+            }
+            print!("|");
+            if is_debug && y < info_lines.len() {
+                print!(" {}", info_lines[y]);
+            }
+            println!();
+        }
+        println!("|{}|", (0..DISPLAY_WIDTH).map(|_| "__").collect::<String>());
+        println!();
+        if is_debug {
+            println!("Welcome to the debug terminal! h: help, c: continue");
+        } else {
+            println!();
+            println!();
+        }
+    }
+}
+
+fn print_debug(
+    n_instructions_executed: &mut u128,
+    instruction: Instruction,
+    instruction_raw: u16,
+    last_instructions: &VecDeque<(u16, u16, Instruction)>,
+    info_lines: &mut Vec<String>,
+    old_register_state: [u8; 16],
+    old_i_state: (u16, u8, u8),
+) {
+    // If the current instruction is draw, skip to the next vertical blank
+    if let Instruction::Draw(_, _, _) = instruction {
+        while *n_instructions_executed % 12 != 1 {
+            *n_instructions_executed += 1;
+        }
+    }
+
+    info!(
+        info_lines,
+        "|---------------------INSTRUCTIONS-----------------------"
+    );
+    // Previous instructions
+    for instruction in last_instructions.iter().rev() {
+        info!(
+            info_lines,
+            "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+            instruction.0,
+            instruction.1,
+            instruction.2
+        );
+    }
+    // Current instruction
+    info!(
+        info_lines,
+        "| \x1b[32m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+        get_pc() - 2,
+        instruction_raw,
+        instruction
+    );
+    // Next instruction
+    let mut next_instruction;
+    let (_, mut next_addr) = (Some(instruction), get_pc() - 2);
+    for _ in 0..3 {
+        (next_instruction, next_addr) = predict_instruction(next_addr);
+        if let Some(ins) = next_instruction {
+            info!(
+                info_lines,
+                "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+                next_addr,
+                get_memory_u16(next_addr),
+                ins
+            );
+        } else {
+            info!(
+                info_lines,
+                "| \x1b[2;37m{:#06X}: {:#04X} -> (invalid)\x1b[0m",
+                next_addr,
+                get_memory_u16(next_addr)
+            );
+        }
+    }
+
+    // Registers + stack
+    let stack = get_stack();
+    info!(
+        info_lines,
+        "|-----REGISTERS-----|----STACK({:X})----|------TIMERS------|",
+        stack.len()
+    );
+    for (i, old_reg) in old_register_state.iter().enumerate() {
+        // Register
+        let reg = get_register((i as u8).into());
+
+        if *old_reg != reg {
+            // Register changed
+            info!(
+                info_lines,
+                "| \x1b[32mV{:X}: {:#04X}   \x1b[2;37m{:#04X}\x1b[0m   |", i, reg, old_reg
+            );
+        } else {
+            // Register did not change
+            info!(info_lines, "| V{:X}: {:#04X}          |", i, reg);
+        }
+
+        // Stack
+        if i < stack.len() {
+            // Stack contains an entry
+            infop!(info_lines, "     {:#06X}     |", stack[i]);
+        } else {
+            // Stack does not contain an entry
+            infop!(info_lines, "                |");
+        }
+
+        // Delay timer
+        if i == 0 {
+            infop!(info_lines, "   DELAY   {:#04X}   |", get_delay_timer());
+        } else if i == 1 {
+            infop!(info_lines, "   SOUND   {:#04X}   |", get_sound_timer());
+        } else {
+            infop!(info_lines, "                  |");
+        }
+    }
+    info!(
+        info_lines,
+        "|-------------------|----------------|------------------|"
+    );
+    // I
+    let i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
+    if old_i_state != i_state {
+        info!(
+            info_lines,
+            "| \x1b[32mI: {:#06X} -> {:#04X} {:#04X}  \x1b[2;37m{:#06X} -> {:#04X} {:#04X}\x1b[0m           |",
+            i_state.0,
+            i_state.1,
+            i_state.2,
+            old_i_state.0,
+            old_i_state.1,
+            old_i_state.2
+        );
+    } else {
+        info!(
+            info_lines,
+            "| I: {:#06X} -> {:#04X} {:#04X}                                |",
+            i_state.0,
+            i_state.1,
+            i_state.2
+        );
+    }
+    info!(
+        info_lines,
+        "|-------------------------------------------------------|"
+    );
+    // TODO: Next instruction (if current instruction is jump, show the instruction at the address to jump to)
+}
+
 /// Handles the debug terminal, and returns whether debug mode should stay enabled.
-fn debug_terminal(last_debug_command: &mut String) -> bool {
+fn debug_terminal(
+    last_debug_command: &mut String,
+    n_instructions_executed: &mut u128,
+    instruction: Instruction,
+    instruction_raw: u16,
+    last_instructions: &VecDeque<(u16, u16, Instruction)>,
+    info_lines: &mut Vec<String>,
+    old_register_state: [u8; 16],
+    old_i_state: (u16, u8, u8),
+    old_display_state: &[[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
+) -> bool {
     loop {
         println!("> ");
         print!("\x1b[1A\x1b[2C");
@@ -345,15 +425,41 @@ fn debug_terminal(last_debug_command: &mut String) -> bool {
         if line.trim() == "" {
             line = last_debug_command.clone();
         }
-        match line.trim() {
+        let args = line.trim().split(" ").collect::<Vec<_>>();
+        match args[0] {
             // Print help
             "h" | "help" => {
-                println!("h, help        Print this message");
-                println!("c, continue    Exit debug mode and continue program execution");
-                println!("n, next        Execute the next instruction");
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                if args.len() > 1 {
+                    print!("Unexpected args for command {}: ", args[0]);
+                    for arg in args[1..].iter() {
+                        print!("{} ", arg);
+                    }
+                    println!();
+                    continue;
+                }
+                println!("h, help          Print this message");
+                println!("c, continue      Exit debug mode and continue program execution");
+                println!("n, next          Execute the next instruction");
+                println!(
+                    "j, jump address  Set PC to the given address. Addresses must be <= 12-bit."
+                );
+                println!("                 Valid formats for addresses are:");
+                println!("                     123     Number");
+                println!("                     0x123   Hex");
+                println!("                     0b101   Binary");
             }
             // Continue program execution
             "c" | "continue" => {
+                if args.len() > 1 {
+                    print!("Unexpected args for command {}: ", args[0]);
+                    for arg in args[1..].iter() {
+                        print!("{} ", arg);
+                    }
+                    println!();
+                    continue;
+                }
                 for _ in 0..DISPLAY_HEIGHT + 5 {
                     println!();
                 }
@@ -362,16 +468,127 @@ fn debug_terminal(last_debug_command: &mut String) -> bool {
             }
             // Next instruction
             "n" | "next" => {
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                if args.len() > 1 {
+                    print!("Unexpected args for command {}: ", args[0]);
+                    for arg in args[1..].iter() {
+                        print!("{} ", arg);
+                    }
+                    println!();
+                    continue;
+                }
                 for _ in 0..DISPLAY_HEIGHT + 5 {
                     println!();
                 }
-                last_debug_command.clear();
-                last_debug_command.push_str(line.trim());
                 return true;
             }
+            // Jump to the given address.
             "j" | "jump" => {
-                println!("test");
                 last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                if args.len() != 2 {
+                    println!("usage: {} address", args[0]);
+                    continue;
+                }
+                let addr = args[1];
+                let addr = if addr.contains("0x") {
+                    match usize::from_str_radix(&addr[2..], 16) {
+                        Ok(val) => val,
+                        Err(e) => {
+                            println!("could not parse hex value {}: {}", addr, e);
+                            continue;
+                        }
+                    }
+                } else if addr.contains("0b") {
+                    match usize::from_str_radix(&addr[2..], 2) {
+                        Ok(val) => val,
+                        Err(e) => {
+                            println!("could not parse binary value {}: {}", addr, e);
+                            continue;
+                        }
+                    }
+                } else {
+                    match addr.parse::<usize>() {
+                        Ok(val) => val,
+                        Err(e) => {
+                            println!("could not parse base 10 value {}: {}", addr, e);
+                            continue;
+                        }
+                    }
+                };
+
+                if addr & 0x0FFF != addr {
+                    println!(
+                        "address {:#X} is too large to jump to (should be 12 bits)",
+                        addr
+                    );
+                }
+                set_pc(addr as u16);
+                for _ in 0..DISPLAY_HEIGHT + 5 {
+                    println!();
+                }
+                info_lines.clear();
+                print_debug(
+                    n_instructions_executed,
+                    instruction,
+                    instruction_raw,
+                    last_instructions,
+                    info_lines,
+                    old_register_state,
+                    old_i_state,
+                );
+                draw(
+                    *n_instructions_executed,
+                    true,
+                    old_display_state,
+                    info_lines,
+                );
+            }
+            // Print the value of something
+            // - VX
+            // - I
+            // - PC
+            // - Delay timer
+            // - Sound timer
+            // - Memory
+            "p" | "print" => {
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                println!("TODO");
+            }
+            // Set something to a value
+            // - VX
+            // - I
+            // - PC
+            // - Delay timer
+            // - Sound timer
+            // - Memory
+            "s" | "set" => {
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                println!("TODO");
+            }
+            // Push to stack
+            "push" => {
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                println!("TODO");
+            }
+            // Pop from stack
+            "pop" => {
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                println!("TODO");
+            }
+            // Manage breakpoints
+            "b" | "breakpoint" => {
+                last_debug_command.clear();
+                last_debug_command.push_str(line.trim());
+                // b 0x200: Set a breakpoint at 0x200
+                // b l | list: List breakpoints
+                // b d | delete 0x200: Delete the breakpoint at 0x200
+                println!("TODO");
             }
             // Unknown instruction or blank line
             _ => {
