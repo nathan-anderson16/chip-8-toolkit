@@ -16,7 +16,7 @@ use crate::{
     system::{
         DISPLAY_HEIGHT, DISPLAY_WIDTH, Register, decrement_delay_timer, decrement_sound_timer,
         get_delay_timer, get_display, get_full_display, get_i, get_memory_u8, get_memory_u16,
-        get_pc, get_register, get_registers, get_sound_timer, get_stack, set_pc,
+        get_pc, get_register, get_registers, get_sound_timer, get_stack, peek_stack, set_pc,
     },
 };
 
@@ -394,12 +394,10 @@ pub fn print_debug(
         info_lines,
         "|-------------------------------------------------------|"
     );
-    // TODO: Next instruction (if current instruction is jump, show the instruction at the address to jump to)
 }
 
 /// Given an instruction, predict the next instruction and its address.
 /// This is not always accurate.
-/// TODO: Add SubroutineReturn and SkipConditionals
 fn predict_instruction(addr: u16) -> (Option<Instruction>, u16) {
     let Some(ins) = decode(get_memory_u16(addr)) else {
         return (None, addr + 2);
@@ -411,6 +409,13 @@ fn predict_instruction(addr: u16) -> (Option<Instruction>, u16) {
             nnn,
         ),
         Instruction::SubroutineCall(nnn) => (decode(get_memory_u16(nnn)), nnn),
+        Instruction::SubroutineReturn => {
+            if let Some(s) = peek_stack() {
+                (decode(get_memory_u16(s)), s)
+            } else {
+                (decode(get_memory_u16(addr + 2)), addr + 2) // TODO change this to be something more clear?
+            }
+        }
         _ => (decode(get_memory_u16(addr + 2)), addr + 2),
     }
 }

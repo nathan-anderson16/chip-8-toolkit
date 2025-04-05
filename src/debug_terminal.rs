@@ -6,7 +6,10 @@ use std::{
 use crate::{
     instructions::Instruction,
     run::{draw, print_debug},
-    system::{DISPLAY_HEIGHT, DISPLAY_WIDTH, set_pc},
+    system::{
+        DISPLAY_HEIGHT, DISPLAY_WIDTH, get_delay_timer, get_i, get_memory_u8, get_pc, get_register,
+        get_sound_timer, set_pc,
+    },
 };
 
 pub struct DebugState {
@@ -59,10 +62,24 @@ pub fn debug_terminal(
                 println!(
                     "j, jump address  Set PC to the given address. Addresses must be <= 12-bit."
                 );
-                println!("                 Valid formats for addresses are:");
-                println!("                     123     Number");
-                println!("                     0x123   Hex");
-                println!("                     0b101   Binary");
+                println!("                     Valid formats for addresses are:");
+                println!("                         123     Number");
+                println!("                         0x123   Hex");
+                println!("                         0b101   Binary");
+                println!(
+                    "p, print         Print the value in the given register or at the given address"
+                );
+                println!("                 Valid registers to print are:");
+                println!("                     VX         Register VX");
+                println!("                     i, index   Register I");
+                println!("                     pc         Register PC");
+                println!("                     s, delay   Delay timer");
+                println!("                     s, sound   Sound timer");
+                println!("                     address    The byte in memory at the address");
+                println!("                         Valid formats for addresses are:");
+                println!("                             123     Number");
+                println!("                             0x123   Hex");
+                println!("                             0b101   Binary");
             }
             // Continue program execution
             "c" | "continue" => {
@@ -105,36 +122,13 @@ pub fn debug_terminal(
                     println!("usage: {} address", args[0]);
                     continue;
                 }
-                let addr = args[1];
-                let addr = if addr.contains("0x") {
-                    match usize::from_str_radix(&addr[2..], 16) {
-                        Ok(val) => val,
-                        Err(e) => {
-                            println!("could not parse hex value {}: {}", addr, e);
-                            continue;
-                        }
-                    }
-                } else if addr.contains("0b") {
-                    match usize::from_str_radix(&addr[2..], 2) {
-                        Ok(val) => val,
-                        Err(e) => {
-                            println!("could not parse binary value {}: {}", addr, e);
-                            continue;
-                        }
-                    }
-                } else {
-                    match addr.parse::<usize>() {
-                        Ok(val) => val,
-                        Err(e) => {
-                            println!("could not parse base 10 value {}: {}", addr, e);
-                            continue;
-                        }
-                    }
+                let Some(addr) = str_to_num(args[1]) else {
+                    continue;
                 };
 
                 if addr & 0x0FFF != addr {
                     println!(
-                        "address {:#X} is too large to jump to (should be 12 bits)",
+                        "address {:#06X} is too large to jump to (should be 12 bits)",
                         addr
                     );
                 }
@@ -157,24 +151,71 @@ pub fn debug_terminal(
                 );
             }
             // Print the value of something
-            // - VX
-            // - I
-            // - PC
-            // - Delay timer
-            // - Sound timer
-            // - Memory
+            // - v{x}: VX
+            // - i: I
+            // - pc: PC
+            // - d | delay: Delay timer
+            // - s | sound: Sound timer
+            // - addr: Memory
             "p" | "print" => {
                 debug_state.last_debug_command.clear();
                 debug_state.last_debug_command.push_str(line.trim());
-                println!("TODO");
+                if args.len() != 2 {
+                    println!("invalid usage of command {}", args[0]);
+                    continue;
+                }
+                // Registers
+                if args[1].starts_with(['v', 'V']) {
+                    if args[1].len() != 2 {
+                        println!("invalid usage of command {}", args[0]);
+                        continue;
+                    }
+                    let reg_idx = match usize::from_str_radix(&args[1][1..2], 16) {
+                        Ok(val) => val,
+                        Err(e) => {
+                            println!("could not parse hex value {}: {}", args[1], e);
+                            continue;
+                        }
+                    };
+                    println!("{:#04X}", get_register((reg_idx as u8).into()));
+                    continue;
+                }
+                match args[1] {
+                    "i" | "index" => {
+                        println!("{:#06X}", get_i());
+                    }
+                    "pc" => {
+                        println!("{:#06X}", get_pc());
+                    }
+                    "d" | "delay" => {
+                        println!("{:#04X}", get_delay_timer());
+                    }
+                    "s" | "sound" => {
+                        println!("{:#04X}", get_sound_timer());
+                    }
+                    // Unknown => try to interpret as an address
+                    _ => {
+                        let Some(addr) = str_to_num(args[1]) else {
+                            continue;
+                        };
+                        if addr & 0x0FFF != addr {
+                            println!(
+                                "address {:#06X} is too large to jump to (should be 12 bits)",
+                                addr
+                            );
+                        }
+                        println!("{:#04X}", get_memory_u8(addr as u16));
+                    }
+                }
+                continue;
             }
             // Set something to a value
-            // - VX
-            // - I
-            // - PC
-            // - Delay timer
-            // - Sound timer
-            // - Memory
+            // - v{x}: VX
+            // - i: I
+            // - pc: PC
+            // - d | delay: Delay timer
+            // - s | sound: Sound timer
+            // - addr: Memory
             "s" | "set" => {
                 debug_state.last_debug_command.clear();
                 debug_state.last_debug_command.push_str(line.trim());
@@ -210,5 +251,33 @@ pub fn debug_terminal(
                 }
             }
         };
+    }
+}
+
+fn str_to_num(addr: &str) -> Option<usize> {
+    if addr.contains("0x") {
+        match usize::from_str_radix(&addr[2..], 16) {
+            Ok(val) => Some(val),
+            Err(e) => {
+                println!("could not parse hex value {}: {}", addr, e);
+                None
+            }
+        }
+    } else if addr.contains("0b") {
+        match usize::from_str_radix(&addr[2..], 2) {
+            Ok(val) => Some(val),
+            Err(e) => {
+                println!("could not parse binary value {}: {}", addr, e);
+                None
+            }
+        }
+    } else {
+        match addr.parse::<usize>() {
+            Ok(val) => Some(val),
+            Err(e) => {
+                println!("could not parse base 10 value {}: {}", addr, e);
+                None
+            }
+        }
     }
 }

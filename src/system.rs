@@ -135,6 +135,18 @@ pub fn get_stack() -> Vec<u16> {
     }
 }
 
+pub fn peek_stack() -> Option<u16> {
+    #[allow(static_mut_refs)]
+    unsafe {
+        let stack = STACK.lock().unwrap();
+        if stack.len() > 0 {
+            Some(stack[stack.len() - 1])
+        } else {
+            None
+        }
+    }
+}
+
 /// The delay timer. Decremented at a rate of 60 HZ until it reaches 0.
 pub static mut DELAY_TIMER: u8 = 0;
 
