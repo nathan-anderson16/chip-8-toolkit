@@ -169,7 +169,7 @@ pub fn execute(
         Instruction::Draw(vx, vy, n) => {
             // Wait until just after vblank to draw
             if (n_instructions_executed % 12) != 1 {
-                set_pc(get_pc() - 2);
+                set_pc(get_pc().saturating_sub(2));
                 return;
             }
             set_register(Register::VF, 0);
@@ -249,7 +249,7 @@ pub fn execute(
             if let Some(key) = last_pressed_keys.iter().find(|k| !pressed_keys.contains(k)) {
                 set_register(vx, *KEYPRESS_MAP.get().unwrap().get(key).unwrap());
             } else {
-                set_pc(get_pc() - 2);
+                set_pc(get_pc().saturating_sub(2));
             }
         }
         // FX29

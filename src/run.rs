@@ -167,9 +167,11 @@ pub fn run() {
         if debug_state.last_instructions.len() == 3 {
             debug_state.last_instructions.pop_back();
         }
-        debug_state
-            .last_instructions
-            .push_front((get_pc() - 2, instruction_raw, instruction));
+        debug_state.last_instructions.push_front((
+            get_pc().saturating_sub(2),
+            instruction_raw,
+            instruction,
+        ));
 
         // Execute the instruction
         execute(
@@ -297,13 +299,13 @@ pub fn print_debug(
     info!(
         info_lines,
         "| \x1b[32m{:#06X}: {:#04X} -> {:?}\x1b[0m",
-        get_pc() - 2,
+        get_pc().saturating_sub(2),
         instruction_raw,
         instruction
     );
     // Next instruction
     let mut next_instruction;
-    let (_, mut next_addr) = (Some(instruction), get_pc() - 2);
+    let (_, mut next_addr) = (Some(instruction), get_pc().saturating_sub(2));
     for _ in 0..3 {
         (next_instruction, next_addr) = predict_instruction(next_addr);
         if let Some(ins) = next_instruction {

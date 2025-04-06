@@ -8,7 +8,8 @@ use crate::{
     run::{draw, print_debug},
     system::{
         DISPLAY_HEIGHT, DISPLAY_WIDTH, get_delay_timer, get_i, get_memory_u8, get_pc, get_register,
-        get_sound_timer, set_pc,
+        get_sound_timer, set_delay_timer, set_i, set_memory_u8, set_pc, set_register,
+        set_sound_timer, stack_pop, stack_push,
     },
 };
 
@@ -133,22 +134,13 @@ pub fn debug_terminal(
                     );
                 }
                 set_pc(addr as u16);
-                for _ in 0..DISPLAY_HEIGHT + 5 {
-                    println!();
-                }
-                debug_state.info_lines.clear();
-                print_debug(
-                    n_instructions_executed,
+                debug_redraw(
+                    debug_state,
                     instruction,
                     instruction_raw,
-                    debug_state,
+                    n_instructions_executed,
                 );
-                draw(
-                    *n_instructions_executed,
-                    true,
-                    &debug_state.old_display_state,
-                    &mut debug_state.info_lines,
-                );
+                continue;
             }
             // Print the value of something
             // - v{x}: VX
@@ -219,19 +211,177 @@ pub fn debug_terminal(
             "s" | "set" => {
                 debug_state.last_debug_command.clear();
                 debug_state.last_debug_command.push_str(line.trim());
-                println!("TODO");
+                if args.len() != 3 {
+                    println!("invalid usage of command {}", args[0]);
+                    continue;
+                }
+                let Some(val) = str_to_num(args[2]) else {
+                    continue;
+                };
+                // Registers
+                if args[1].starts_with(['v', 'V']) {
+                    if args[1].len() != 2 {
+                        println!("invalid usage of command {}", args[0]);
+                        continue;
+                    }
+                    let reg_idx = match usize::from_str_radix(&args[1][1..2], 16) {
+                        Ok(val) => val,
+                        Err(e) => {
+                            println!("could not parse hex value {}: {}", args[1], e);
+                            continue;
+                        }
+                    };
+                    if val & 0xFF != val {
+                        println!(
+                            "could not set {}: value ({}) was more than 8 bits",
+                            args[1], args[2]
+                        );
+                        continue;
+                    }
+                    set_register((reg_idx as u8).into(), val as u8);
+                    debug_redraw(
+                        debug_state,
+                        instruction,
+                        instruction_raw,
+                        n_instructions_executed,
+                    );
+                    continue;
+                }
+                match args[1] {
+                    "i" | "index" => {
+                        if val & 0x0FFF != val {
+                            println!(
+                                "could not set {}: value ({}) was more than 12 bits",
+                                args[1], args[2]
+                            );
+                            continue;
+                        }
+                        set_i(val as u16);
+                        debug_redraw(
+                            debug_state,
+                            instruction,
+                            instruction_raw,
+                            n_instructions_executed,
+                        );
+                        continue;
+                    }
+                    "pc" => {
+                        let val = val + 2;
+                        if val & 0x0FFF != val {
+                            println!(
+                                "could not set {}: value ({}) was more than 12 bits",
+                                args[1], args[2]
+                            );
+                            continue;
+                        }
+                        set_pc(val as u16);
+                        debug_redraw(
+                            debug_state,
+                            instruction,
+                            instruction_raw,
+                            n_instructions_executed,
+                        );
+                        continue;
+                    }
+                    "d" | "delay" => {
+                        if val & 0xFF != val {
+                            println!(
+                                "could not set {}: value ({}) was more than 8 bits",
+                                args[1], args[2]
+                            );
+                            continue;
+                        }
+                        set_delay_timer(val as u8);
+                        debug_redraw(
+                            debug_state,
+                            instruction,
+                            instruction_raw,
+                            n_instructions_executed,
+                        );
+                        continue;
+                    }
+                    "s" | "sound" => {
+                        if val & 0xFF != val {
+                            println!(
+                                "could not set {}: value ({}) was more than 8 bits",
+                                args[1], args[2]
+                            );
+                            continue;
+                        }
+                        set_sound_timer(val as u8);
+                        debug_redraw(
+                            debug_state,
+                            instruction,
+                            instruction_raw,
+                            n_instructions_executed,
+                        );
+                        continue;
+                    }
+                    // Unknown => try to interpret as an address
+                    _ => {
+                        let Some(addr) = str_to_num(args[1]) else {
+                            continue;
+                        };
+                        if addr & 0x0FFF != addr {
+                            println!(
+                                "address {:#06X} is too large to jump to (should be 12 bits)",
+                                addr
+                            );
+                        }
+                        if val & 0xFF != val {
+                            println!(
+                                "could not set memory at {}: value ({}) was more than 8 bits",
+                                args[1], args[2]
+                            );
+                            continue;
+                        }
+                        set_memory_u8(addr as u16, val as u8);
+                        continue;
+                    }
+                }
             }
             // Push to stack
             "push" => {
                 debug_state.last_debug_command.clear();
                 debug_state.last_debug_command.push_str(line.trim());
-                println!("TODO");
+                let Some(addr) = str_to_num(args[1]) else {
+                    continue;
+                };
+                if addr & 0x0FFF != addr {
+                    println!(
+                        "address {:#06X} is too large to push to stack (should be 12 bits)",
+                        addr
+                    );
+                }
+                stack_push(addr as u16);
+                debug_redraw(
+                    debug_state,
+                    instruction,
+                    instruction_raw,
+                    n_instructions_executed,
+                );
+                continue;
             }
             // Pop from stack
             "pop" => {
                 debug_state.last_debug_command.clear();
                 debug_state.last_debug_command.push_str(line.trim());
-                println!("TODO");
+                match stack_pop() {
+                    None => {
+                        println!("could not pop: stack was empty");
+                        continue;
+                    }
+                    Some(val) => {
+                        println!("{:#06X}", val);
+                        debug_redraw(
+                            debug_state,
+                            instruction,
+                            instruction_raw,
+                            n_instructions_executed,
+                        );
+                        continue;
+                    }
+                }
             }
             // Manage breakpoints
             "b" | "breakpoint" => {
@@ -254,6 +404,34 @@ pub fn debug_terminal(
     }
 }
 
+/// Redraw the screen in debug mode.
+/// This is not a full redraw, and it should only be used when things like registers are changed in debug mode but we don't want to advance another instruction.
+fn debug_redraw(
+    debug_state: &mut DebugState,
+    instruction: Instruction,
+    instruction_raw: u16,
+    n_instructions_executed: &mut u128,
+) {
+    for _ in 0..DISPLAY_HEIGHT + 5 {
+        println!();
+    }
+    debug_state.info_lines.clear();
+    print_debug(
+        n_instructions_executed,
+        instruction,
+        instruction_raw,
+        debug_state,
+    );
+    draw(
+        *n_instructions_executed,
+        true,
+        &debug_state.old_display_state,
+        &mut debug_state.info_lines,
+    );
+}
+
+/// Try to convert the given string to a number.
+/// Supports hex (0x123), binary (0b111), and base 10 (123).
 fn str_to_num(addr: &str) -> Option<usize> {
     if addr.contains("0x") {
         match usize::from_str_radix(&addr[2..], 16) {
