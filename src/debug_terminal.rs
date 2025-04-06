@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     io::{self, Write},
 };
 
@@ -20,7 +20,7 @@ pub struct DebugState {
     pub old_register_state: [u8; 16],
     pub old_i_state: (u16, u8, u8),
     pub old_display_state: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
-    pub breakpoints: Vec<u16>,
+    pub breakpoints: HashSet<u16>,
 }
 
 /// Handles the debug terminal, and returns whether debug mode should stay enabled.
@@ -61,59 +61,76 @@ pub fn debug_terminal(
                     println!();
                     continue;
                 }
-                println!("h, help      Print this message");
-                println!("c, continue  Exit debug mode and continue program execution");
-                println!("n, next      Execute the next instruction");
-                println!("j, jump      Set PC to the given address. Addresses must be <= 12-bit.");
-                println!("                 Usage: j | jump <address>");
-                println!("                     Valid formats for addresses are:");
-                println!("                         123     Number");
-                println!("                         0x123   Hex");
-                println!("                         0b101   Binary");
+                println!("b | breakpoint  Manage breakpoints");
+                println!("                    Usage:");
                 println!(
-                    "p, print     Print the value in the given register or at the given address"
+                    "                        b | breakpoint <address>             Set a breakpoint at the given address"
                 );
-                println!("                 Usage: p | print <target>");
-                println!("                 Valid registers to print are:");
-                println!("                     VX         Register VX");
-                println!("                     i, index   Register I");
-                println!("                     pc         Register PC");
-                println!("                     s, delay   Delay timer");
-                println!("                     s, sound   Sound timer");
-                println!("                     address    The byte in memory at the address");
-                println!("                         Valid formats for addresses are:");
-                println!("                             123     Number");
-                println!("                             0x123   Hex");
-                println!("                             0b101   Binary");
                 println!(
-                    "s, set       Set the value in the given register or at the given address"
+                    "                        b | breakpoint l | list              List all breakpoints"
                 );
-                println!("                 Usage: s | set <target> <value>");
-                println!("                 Valid registers to set are:");
-                println!("                     VX         Register VX");
-                println!("                         value must be <= 8 bits");
-                println!("                     i, index   Register I");
-                println!("                         value must be <= 12 bits");
-                println!("                     pc         Register PC");
-                println!("                         value must be <= 12 bits");
-                println!("                     s, delay   Delay timer");
-                println!("                         value must be <= 8 bits");
-                println!("                     s, sound   Sound timer");
-                println!("                         value must be <= 8 bits");
-                println!("                     address    The byte in memory at the address");
-                println!("                         value must be <= 8 bits");
-                println!("                         Valid formats for addresses are:");
-                println!("                             123     Number");
-                println!("                             0x123   Hex");
-                println!("                             0b101   Binary");
-                println!("push         Push the given value to the stack.");
-                println!("                 Usage: push <value>");
-                println!("                 value must be <= 8 bits");
-                println!("                 Valid formats for value are:");
-                println!("                     123     Number");
-                println!("                     0x123   Hex");
-                println!("                     0b101   Binary");
-                println!("pop          Pop the stack.");
+                println!(
+                    "                        b | breakpoint r | remove <address>  Remove the breakpoint at the given address"
+                );
+                println!("                    Valid formats for address are:");
+                println!("                        123     Number");
+                println!("                        0x123   Hex");
+                println!("                        0b101   Binary");
+                println!("c, continue     Exit debug mode and continue program execution");
+                println!("h, help         Print this message");
+                println!(
+                    "j, jump         Set PC to the given address. Addresses must be <= 12-bit."
+                );
+                println!("                    Usage: j | jump <address>");
+                println!("                        Valid formats for addresses are:");
+                println!("                            123     Number");
+                println!("                            0x123   Hex");
+                println!("                            0b101   Binary");
+                println!("n, next         Execute the next instruction");
+                println!("pop             Pop the stack.");
+                println!(
+                    "p, print        Print the value in the given register or at the given address"
+                );
+                println!("                    Usage: p | print <target>");
+                println!("                    Valid registers to print are:");
+                println!("                        VX         Register VX");
+                println!("                        i, index   Register I");
+                println!("                        pc         Register PC");
+                println!("                        s, delay   Delay timer");
+                println!("                        s, sound   Sound timer");
+                println!("                        address    The byte in memory at the address");
+                println!("                            Valid formats for addresses are:");
+                println!("                                123     Number");
+                println!("                                0x123   Hex");
+                println!("                                0b101   Binary");
+                println!("push            Push the given value to the stack.");
+                println!("                    Usage: push <value>");
+                println!("                    value must be <= 8 bits");
+                println!("                    Valid formats for value are:");
+                println!("                        123     Number");
+                println!("                        0x123   Hex");
+                println!("                        0b101   Binary");
+                println!(
+                    "s, set          Set the value in the given register or at the given address"
+                );
+                println!("                    Usage: s | set <target> <value>");
+                println!("                    Valid registers to set are:");
+                println!("                        VX         Register VX");
+                println!("                            value must be <= 8 bits");
+                println!("                        i, index   Register I");
+                println!("                            value must be <= 12 bits");
+                println!("                        pc         Register PC");
+                println!("                            value must be <= 12 bits");
+                println!("                        s, delay   Delay timer");
+                println!("                            value must be <= 8 bits");
+                println!("                        s, sound   Sound timer");
+                println!("                            value must be <= 8 bits");
+                println!("                        address    The byte in memory at the address");
+                println!("                            value must be <= 8 bits");
+                println!("                            Valid formats for addresses are:");
+                println!("                                123     Number");
+                println!("                                0x123   Hex");
+                println!("                                0b101   Binary");
             }
             // Continue program execution
             "c" | "continue" => {
@@ -360,6 +377,7 @@ pub fn debug_terminal(
                                 "address {:#06X} is too large to jump to (should be 12 bits)",
                                 addr
                             );
+                            continue;
                         }
                         if val & 0xFF != val {
                             println!(
@@ -385,6 +403,7 @@ pub fn debug_terminal(
                         "address {:#06X} is too large to push to stack (should be 12 bits)",
                         addr
                     );
+                    continue;
                 }
                 stack_push(addr as u16);
                 debug_redraw(
@@ -418,12 +437,65 @@ pub fn debug_terminal(
             }
             // Manage breakpoints
             "b" | "breakpoint" => {
-                debug_state.last_debug_command.clear();
-                debug_state.last_debug_command.push_str(line.trim());
                 // b 0x200: Set a breakpoint at 0x200
                 // b l | list: List breakpoints
-                // b d | delete 0x200: Delete the breakpoint at 0x200
-                println!("TODO");
+                // b r | remove 0x200: Delete the breakpoint at 0x200
+                debug_state.last_debug_command.clear();
+                debug_state.last_debug_command.push_str(line.trim());
+                if args.len() < 2 {
+                    println!("invalid usage of command {}", args[0]);
+                    continue;
+                }
+                match args[1] {
+                    // List breakpoints
+                    "l" | "list" => {
+                        if args.len() != 2 {
+                            println!("invalid usage of command {}", args[0]);
+                            continue;
+                        }
+                        let mut breakpoints = debug_state.breakpoints.iter().collect::<Vec<_>>();
+                        breakpoints.sort();
+                        for b in breakpoints {
+                            println!("{:#06X}", b);
+                        }
+                    }
+                    // Delete a breakpoint
+                    "r" | "remove" => {
+                        if args.len() != 3 {
+                            println!("invalid usage of command {}", args[0]);
+                            continue;
+                        }
+                        let Some(addr) = str_to_num(args[2]) else {
+                            continue;
+                        };
+                        if addr & 0x0FFF != addr {
+                            // This address will never be in breakpoints
+                            continue;
+                        }
+                        if !debug_state.breakpoints.remove(&(addr as u16)) {
+                            println!("address {:#06X} was not a breakpoint", addr);
+                        }
+                        continue;
+                    }
+                    // Add a new breakpoint
+                    _ => {
+                        if args.len() != 2 {
+                            println!("invalid usage of command {}", args[0]);
+                            continue;
+                        }
+                        let Some(addr) = str_to_num(args[1]) else {
+                            continue;
+                        };
+                        if addr & 0x0FFF != addr {
+                            println!("address {:#06X} is too large (should be 12 bits)", addr);
+                            continue;
+                        }
+                        if !debug_state.breakpoints.insert(addr as u16) {
+                            println!("address {:#06X} was already a breakpoint", addr);
+                        }
+                        continue;
+                    }
+                }
             }
             // Key press
             // Key release

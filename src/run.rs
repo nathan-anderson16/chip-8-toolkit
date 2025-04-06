@@ -124,7 +124,7 @@ pub fn run() {
         old_register_state: get_registers(),
         old_i_state: (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2)),
         old_display_state: get_full_display(),
-        breakpoints: Vec::new(),
+        breakpoints: HashSet::new(),
     };
 
     loop {
@@ -141,6 +141,11 @@ pub fn run() {
         if pressed_keys.contains(&Keycode::Escape) {
             is_debug = true;
             print!("\x1b[2K\r"); // Clear the current line to remove the escape code
+        }
+
+        // If we're at a breakpoint, enter debug mode
+        if debug_state.breakpoints.contains(&get_pc()) {
+            is_debug = true;
         }
 
         // Fetch the next instruction
