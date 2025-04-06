@@ -20,6 +20,7 @@ pub struct DebugState {
     pub old_register_state: [u8; 16],
     pub old_i_state: (u16, u8, u8),
     pub old_display_state: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
+    pub breakpoints: Vec<u16>,
 }
 
 /// Handles the debug terminal, and returns whether debug mode should stay enabled.
@@ -43,6 +44,9 @@ pub fn debug_terminal(
         if line.trim() == "" {
             line = debug_state.last_debug_command.clone();
         }
+
+        // TODO: Command history
+
         let args = line.trim().split(" ").collect::<Vec<_>>();
         match args[0] {
             // Print help
@@ -57,19 +61,19 @@ pub fn debug_terminal(
                     println!();
                     continue;
                 }
-                println!("h, help          Print this message");
-                println!("c, continue      Exit debug mode and continue program execution");
-                println!("n, next          Execute the next instruction");
-                println!(
-                    "j, jump address  Set PC to the given address. Addresses must be <= 12-bit."
-                );
+                println!("h, help      Print this message");
+                println!("c, continue  Exit debug mode and continue program execution");
+                println!("n, next      Execute the next instruction");
+                println!("j, jump      Set PC to the given address. Addresses must be <= 12-bit.");
+                println!("                 Usage: j | jump <address>");
                 println!("                     Valid formats for addresses are:");
                 println!("                         123     Number");
                 println!("                         0x123   Hex");
                 println!("                         0b101   Binary");
                 println!(
-                    "p, print         Print the value in the given register or at the given address"
+                    "p, print     Print the value in the given register or at the given address"
                 );
+                println!("                 Usage: p | print <target>");
                 println!("                 Valid registers to print are:");
                 println!("                     VX         Register VX");
                 println!("                     i, index   Register I");
@@ -81,6 +85,35 @@ pub fn debug_terminal(
                 println!("                             123     Number");
                 println!("                             0x123   Hex");
                 println!("                             0b101   Binary");
+                println!(
+                    "s, set       Set the value in the given register or at the given address"
+                );
+                println!("                 Usage: s | set <target> <value>");
+                println!("                 Valid registers to set are:");
+                println!("                     VX         Register VX");
+                println!("                         value must be <= 8 bits");
+                println!("                     i, index   Register I");
+                println!("                         value must be <= 12 bits");
+                println!("                     pc         Register PC");
+                println!("                         value must be <= 12 bits");
+                println!("                     s, delay   Delay timer");
+                println!("                         value must be <= 8 bits");
+                println!("                     s, sound   Sound timer");
+                println!("                         value must be <= 8 bits");
+                println!("                     address    The byte in memory at the address");
+                println!("                         value must be <= 8 bits");
+                println!("                         Valid formats for addresses are:");
+                println!("                             123     Number");
+                println!("                             0x123   Hex");
+                println!("                             0b101   Binary");
+                println!("push         Push the given value to the stack.");
+                println!("                 Usage: push <value>");
+                println!("                 value must be <= 8 bits");
+                println!("                 Valid formats for value are:");
+                println!("                     123     Number");
+                println!("                     0x123   Hex");
+                println!("                     0b101   Binary");
+                println!("pop          Pop the stack.");
             }
             // Continue program execution
             "c" | "continue" => {

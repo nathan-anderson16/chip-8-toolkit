@@ -124,6 +124,7 @@ pub fn run() {
         old_register_state: get_registers(),
         old_i_state: (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2)),
         old_display_state: get_full_display(),
+        breakpoints: Vec::new(),
     };
 
     loop {
