@@ -3,9 +3,12 @@ use std::{
     io::{self, Write},
 };
 
+use device_query::{DeviceQuery, DeviceState, Keycode};
+
 use crate::{
     instructions::Instruction,
     run::{draw, print_debug},
+    stdin::NonblockingReader,
     system::{
         DISPLAY_HEIGHT, DISPLAY_WIDTH, get_delay_timer, get_i, get_memory_u8, get_pc, get_register,
         get_sound_timer, set_delay_timer, set_i, set_memory_u8, set_pc, set_register,
@@ -14,13 +17,78 @@ use crate::{
 };
 
 pub struct DebugState {
+    /// The last command that was run in the debug terminal.
+    /// Used when pressing "enter" on a blank terminal.
+    /// NOT used in history.
     pub last_debug_command: String,
+    /// The last instructions that were executed.
     pub last_instructions: VecDeque<(u16, u16, Instruction)>,
+    /// The lines to print to the right of the screen.
     pub info_lines: Vec<String>,
+    /// The state of the registers on the previous frame.
     pub old_register_state: [u8; 16],
+    /// The state of I on the previous frame.
     pub old_i_state: (u16, u8, u8),
+    /// The state of the display on the previous frame.
     pub old_display_state: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
+    /// A list of the currently set breakpoints.
     pub breakpoints: HashSet<u16>,
+    /// The previous commands run in the session.
+    /// Used when pressing up/down in the debug terminal.
+    pub history: Vec<String>,
+    /// The reader used to read lines from stdin.
+    pub reader: NonblockingReader,
+    /// The keys that were previously pressed.
+    pub last_pressed_keys: Vec<Keycode>,
+}
+
+/// Gets the next line to interpret as a command, including history.
+fn get_line(debug_state: &mut DebugState) -> String {
+    let device_state = DeviceState::new();
+    let mut current_history_idx = 0usize;
+    loop {
+        let keys = device_state.get_keys();
+        // History management
+        if keys.contains(&Keycode::Up) && !debug_state.last_pressed_keys.contains(&Keycode::Up) {
+            // Go back in history
+            if debug_state.history.is_empty() {
+                continue;
+            }
+            current_history_idx = current_history_idx
+                .saturating_add(1)
+                .min(debug_state.history.len());
+            print!(
+                "\x08\x1b[2K\r> {}",
+                debug_state.history[debug_state.history.len() - current_history_idx]
+            );
+            io::stdout().flush().unwrap();
+        }
+        if keys.contains(&Keycode::Down) && !debug_state.last_pressed_keys.contains(&Keycode::Down)
+        {
+            // Go forward in history
+            if debug_state.history.is_empty() {
+                continue;
+            }
+            current_history_idx = current_history_idx.saturating_sub(1);
+            if current_history_idx == debug_state.history.len() {
+                current_history_idx = current_history_idx.saturating_sub(1);
+            }
+            let a = debug_state.history.len() - current_history_idx;
+            print!(
+                "\x08\x1b[2K\r> {}",
+                if a < debug_state.history.len() {
+                    debug_state.history[debug_state.history.len() - current_history_idx].clone()
+                } else {
+                    "".to_string()
+                }
+            );
+            io::stdout().flush().unwrap();
+        }
+        if let Some(line) = debug_state.reader.readline() {
+            return line;
+        }
+        debug_state.last_pressed_keys = keys;
+    }
 }
 
 /// Handles the debug terminal, and returns whether debug mode should stay enabled.
@@ -31,12 +99,14 @@ pub fn debug_terminal(
     debug_state: &mut DebugState,
 ) -> bool {
     loop {
-        println!("> ");
+        // Clear the line, print the prompt, and move the cursor to the end of the prompt
+        println!("\x1b[2K\r> ");
         print!("\x1b[1A\x1b[2C");
         io::stdout().flush().unwrap();
 
-        let mut line = String::new();
-        io::stdin().read_line(&mut line).unwrap();
+        let mut line = get_line(debug_state);
+        // let mut line = String::new();
+        // io::stdin().read_line(&mut line).unwrap();
 
         // Remove escapes
         line = line.replace(['\x1b'], "");
@@ -45,7 +115,13 @@ pub fn debug_terminal(
             line = debug_state.last_debug_command.clone();
         }
 
-        // TODO: Command history
+        if debug_state
+            .history
+            .last()
+            .is_none_or(|val| *val != line.trim())
+        {
+            debug_state.history.push(line.trim().to_string());
+        }
 
         let args = line.trim().split(" ").collect::<Vec<_>>();
         match args[0] {

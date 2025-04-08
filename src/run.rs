@@ -13,6 +13,7 @@ use crate::{
     decode::decode,
     execute::execute,
     instructions::Instruction,
+    stdin::NonblockingReader,
     system::{
         DISPLAY_HEIGHT, DISPLAY_WIDTH, Register, decrement_delay_timer, decrement_sound_timer,
         get_delay_timer, get_display, get_full_display, get_i, get_memory_u8, get_memory_u16,
@@ -125,6 +126,9 @@ pub fn run() {
         old_i_state: (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2)),
         old_display_state: get_full_display(),
         breakpoints: HashSet::new(),
+        history: Vec::new(),
+        reader: NonblockingReader::new(),
+        last_pressed_keys: Vec::new(),
     };
 
     loop {
