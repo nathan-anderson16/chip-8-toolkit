@@ -37,7 +37,7 @@ impl NonblockingReader {
     /// Panics if the channel is closed.
     pub fn readline(&self) -> Option<String> {
         match self.channel.try_recv() {
-            Ok(s) => Some(s),
+            Ok(s) => Some(s.replace("[A", "").replace("[B", "")),
             Err(TryRecvError::Empty) => None,
             _ => panic!("channel disconnected"),
         }

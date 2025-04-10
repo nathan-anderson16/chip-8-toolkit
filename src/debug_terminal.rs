@@ -43,7 +43,12 @@ pub struct DebugState {
 }
 
 /// Gets the next line to interpret as a command, including history.
-fn get_line(debug_state: &mut DebugState) -> String {
+fn get_line(
+    debug_state: &mut DebugState,
+    n_instructions_executed: &mut u128,
+    instruction: Instruction,
+    instruction_raw: u16,
+) -> String {
     let device_state = DeviceState::new();
     let mut current_history_idx = 0usize;
     loop {
@@ -51,14 +56,23 @@ fn get_line(debug_state: &mut DebugState) -> String {
         // History management
         if keys.contains(&Keycode::Up) && !debug_state.last_pressed_keys.contains(&Keycode::Up) {
             // Go back in history
+            debug_redraw(
+                debug_state,
+                instruction,
+                instruction_raw,
+                n_instructions_executed,
+            );
             if debug_state.history.is_empty() {
+                print!("\x1b[2K\r> ");
+                io::stdout().flush().unwrap();
                 continue;
             }
             current_history_idx = current_history_idx
                 .saturating_add(1)
                 .min(debug_state.history.len());
+            io::stdout().flush().unwrap();
             print!(
-                "\x08\x1b[2K\r> {}",
+                "\x1b[2K\r> {}",
                 debug_state.history[debug_state.history.len() - current_history_idx]
             );
             io::stdout().flush().unwrap();
@@ -66,7 +80,15 @@ fn get_line(debug_state: &mut DebugState) -> String {
         if keys.contains(&Keycode::Down) && !debug_state.last_pressed_keys.contains(&Keycode::Down)
         {
             // Go forward in history
+            debug_redraw(
+                debug_state,
+                instruction,
+                instruction_raw,
+                n_instructions_executed,
+            );
             if debug_state.history.is_empty() {
+                print!("\x1b[2K\r> ");
+                io::stdout().flush().unwrap();
                 continue;
             }
             current_history_idx = current_history_idx.saturating_sub(1);
@@ -75,7 +97,7 @@ fn get_line(debug_state: &mut DebugState) -> String {
             }
             let a = debug_state.history.len() - current_history_idx;
             print!(
-                "\x08\x1b[2K\r> {}",
+                "\x1b[2K\r> {}",
                 if a < debug_state.history.len() {
                     debug_state.history[debug_state.history.len() - current_history_idx].clone()
                 } else {
@@ -104,7 +126,12 @@ pub fn debug_terminal(
         print!("\x1b[1A\x1b[2C");
         io::stdout().flush().unwrap();
 
-        let mut line = get_line(debug_state);
+        let mut line = get_line(
+            debug_state,
+            n_instructions_executed,
+            instruction,
+            instruction_raw,
+        );
         // let mut line = String::new();
         // io::stdin().read_line(&mut line).unwrap();
 
@@ -609,6 +636,7 @@ fn debug_redraw(
         &debug_state.old_display_state,
         &mut debug_state.info_lines,
     );
+    io::stdout().flush().unwrap();
 }
 
 /// Try to convert the given string to a number.
