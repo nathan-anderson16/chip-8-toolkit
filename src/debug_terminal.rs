@@ -167,35 +167,39 @@ pub fn debug_terminal(
                 println!("b | breakpoint  Manage breakpoints");
                 println!("                    Usage:");
                 println!(
-                    "                        b | breakpoint <address>             Set a breakpoint at the given address"
+                    "                        <b | breakpoint> <address>               Set a breakpoint at the given address"
                 );
                 println!(
-                    "                        b | breakpoint l | list              List all breakpoints"
+                    "                        <b | breakpoint> <l | list>              List all breakpoints"
                 );
                 println!(
-                    "                        b | breakpoint r | remove <address>  Remove the breakpoint at the given address"
+                    "                        <b | breakpoint> <r | remove> <address>  Remove the breakpoint at the given address"
                 );
                 println!("                    Valid formats for address are:");
                 println!("                        123     Number");
                 println!("                        0x123   Hex");
                 println!("                        0b101   Binary");
+                println!();
                 println!("c, continue     Exit debug mode and continue program execution");
+                println!();
                 println!("h, help         Print this message");
+                println!();
                 println!(
                     "j, jump         Set PC to the given address. Addresses must be <= 12-bit."
                 );
-                println!("                    Usage: j | jump <address>");
+                println!("                    Usage: <j | jump> <address>");
                 println!("                        Valid formats for addresses are:");
                 println!("                            123     Number");
                 println!("                            0x123   Hex");
                 println!("                            0b101   Binary");
+                println!();
                 println!("n, next         Execute the next instruction");
-                println!("pop             Pop the stack.");
+                println!();
                 println!(
                     "p, print        Print the value in the given register or at the given address"
                 );
-                println!("                    Usage: p | print <target>");
-                println!("                    Valid registers to print are:");
+                println!("                    Usage: <p | print> <target>");
+                println!("                    Valid targets are:");
                 println!("                        VX         Register VX");
                 println!("                        i, index   Register I");
                 println!("                        pc         Register PC");
@@ -206,6 +210,9 @@ pub fn debug_terminal(
                 println!("                                123     Number");
                 println!("                                0x123   Hex");
                 println!("                                0b101   Binary");
+                println!();
+                println!("pop             Pop the stack.");
+                println!();
                 println!("push            Push the given value to the stack.");
                 println!("                    Usage: push <value>");
                 println!("                    value must be <= 8 bits");
@@ -213,11 +220,12 @@ pub fn debug_terminal(
                 println!("                        123     Number");
                 println!("                        0x123   Hex");
                 println!("                        0b101   Binary");
+                println!();
                 println!(
                     "s, set          Set the value in the given register or at the given address"
                 );
-                println!("                    Usage: s | set <target> <value>");
-                println!("                    Valid registers to set are:");
+                println!("                    Usage: <s | set> <target> <value>");
+                println!("                    Valid targets are:");
                 println!("                        VX         Register VX");
                 println!("                            value must be <= 8 bits");
                 println!("                        i, index   Register I");
@@ -234,6 +242,17 @@ pub fn debug_terminal(
                 println!("                                123     Number");
                 println!("                                0x123   Hex");
                 println!("                                0b101   Binary");
+                println!();
+                println!(
+                    "x, examine       Examine (print) the given number of bytes at the given address."
+                );
+                println!("                    Usage: <x | examine> <num> <address>");
+                println!(
+                    "                        Valid formats for both addresses and the number of bytes to print are:"
+                );
+                println!("                            123     Number");
+                println!("                            0x123   Hex");
+                println!("                            0b101   Binary");
             }
             // Continue program execution
             "c" | "continue" => {
@@ -498,6 +517,10 @@ pub fn debug_terminal(
             "push" => {
                 debug_state.last_debug_command.clear();
                 debug_state.last_debug_command.push_str(line.trim());
+                if args.len() != 2 {
+                    println!("invalid usage of command {}", args[0]);
+                    continue;
+                }
                 let Some(addr) = str_to_num(args[1]) else {
                     continue;
                 };
@@ -599,6 +622,31 @@ pub fn debug_terminal(
                         continue;
                     }
                 }
+            }
+            "x" | "examine" => {
+                if args.len() != 3 {
+                    println!("invalid usage of command {}", args[0]);
+                    continue;
+                }
+                let Some(n) = str_to_num(args[1]) else {
+                    continue;
+                };
+                let Some(addr) = str_to_num(args[2]) else {
+                    continue;
+                };
+
+                // Print memory at 8 bytes per line
+                for i in 0..n {
+                    if i % 8 == 0 {
+                        if i != 0 {
+                            println!();
+                        }
+                        print!("{:#06X}:  ", addr + i);
+                    }
+                    print!("{:#04X} ", get_memory_u8((addr + i) as u16));
+                }
+                println!();
+                continue;
             }
             // Key press
             // Key release
