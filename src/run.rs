@@ -229,7 +229,7 @@ pub fn draw(
     old_display_state: &[[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
     info_lines: &mut [String],
 ) {
-    // Only draw at ~60FPS
+    // If we're not in debug mode, only draw at ~60FPS
     if n_instructions_executed % 12 == 0 || is_debug {
         // Clear the terminal
         for _ in 0..DISPLAY_HEIGHT + 5 {
@@ -285,6 +285,11 @@ pub fn print_debug(
     // If the current instruction is draw, skip to the next vertical blank
     if let Instruction::Draw(_, _, _) = instruction {
         while *n_instructions_executed % 12 != 1 {
+            // Properly update delay and sound timers
+            if *n_instructions_executed % 12 == 0 {
+                decrement_delay_timer();
+                decrement_sound_timer();
+            }
             *n_instructions_executed += 1;
         }
     }
@@ -308,7 +313,7 @@ pub fn print_debug(
     // Current instruction
     info!(
         info_lines,
-        "| \x1b[32m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+        "| \x1b[1;32m{:#06X}: {:#04X} -> {:?}\x1b[0m",
         get_pc().saturating_sub(2),
         instruction_raw,
         instruction
@@ -321,7 +326,7 @@ pub fn print_debug(
         if let Some(ins) = next_instruction {
             info!(
                 info_lines,
-                "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+                "| {:#06X}: {:#04X} -> {:?}",
                 next_addr,
                 get_memory_u16(next_addr),
                 ins
@@ -329,7 +334,7 @@ pub fn print_debug(
         } else {
             info!(
                 info_lines,
-                "| \x1b[2;37m{:#06X}: {:#04X} -> (invalid)\x1b[0m",
+                "| {:#06X}: {:#04X} -> (invalid)",
                 next_addr,
                 get_memory_u16(next_addr)
             );
