@@ -2,7 +2,17 @@ use std::fs;
 
 use crate::system::{set_memory_u8, set_pc};
 
-pub const ROM_PATH: &str = "roms/tetris.ch8";
+pub static mut ROM_PATH: &str = "";
+
+pub fn set_rom_path(path: &'static str) {
+    unsafe {
+        ROM_PATH = path;
+    }
+}
+
+pub fn get_rom_path() -> &'static str {
+    unsafe { ROM_PATH }
+}
 
 /// Initialize memory:
 /// - Set the font data at 0x50
@@ -32,7 +42,7 @@ fn init_memory() {
     }
 
     // Initialize the ROM
-    let rom_bytes = fs::read(ROM_PATH).expect("failed to read rom file");
+    let rom_bytes = fs::read(get_rom_path()).expect("failed to read rom file");
     for (i, item) in rom_bytes.iter().enumerate() {
         set_memory_u8((0x200 + i) as u16, *item);
     }

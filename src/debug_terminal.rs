@@ -1,6 +1,8 @@
 use std::{
     collections::{HashSet, VecDeque},
     io::{self, Write},
+    thread,
+    time::Duration,
 };
 
 use device_query::{DeviceQuery, DeviceState, Keycode};
@@ -42,13 +44,18 @@ pub struct DebugState {
     pub last_pressed_keys: Vec<Keycode>,
 }
 
+fn print_message(message: String) {
+    print!("\x1b[2K\r>");
+    // This is necessary to clear the [[^A that's printed when arrow keys are pressed
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(1));
+        print!("\x1b[2K\r> {}", message);
+        io::stdout().flush().unwrap();
+    });
+}
+
 /// Gets the next line to interpret as a command, including history.
-fn get_line(
-    debug_state: &mut DebugState,
-    n_instructions_executed: &mut u128,
-    instruction: Instruction,
-    instruction_raw: u16,
-) -> String {
+fn get_line(debug_state: &mut DebugState) -> String {
     let device_state = DeviceState::new();
     let mut current_history_idx = 0usize;
     loop {
@@ -56,12 +63,6 @@ fn get_line(
         // History management
         if keys.contains(&Keycode::Up) && !debug_state.last_pressed_keys.contains(&Keycode::Up) {
             // Go back in history
-            debug_redraw(
-                debug_state,
-                instruction,
-                instruction_raw,
-                n_instructions_executed,
-            );
             if debug_state.history.is_empty() {
                 print!("\x1b[2K\r> ");
                 io::stdout().flush().unwrap();
@@ -70,22 +71,13 @@ fn get_line(
             current_history_idx = current_history_idx
                 .saturating_add(1)
                 .min(debug_state.history.len());
-            io::stdout().flush().unwrap();
-            print!(
-                "\x1b[2K\r> {}",
-                debug_state.history[debug_state.history.len() - current_history_idx]
-            );
-            io::stdout().flush().unwrap();
+            let message =
+                debug_state.history[debug_state.history.len() - current_history_idx].clone();
+            print_message(message);
         }
         if keys.contains(&Keycode::Down) && !debug_state.last_pressed_keys.contains(&Keycode::Down)
         {
             // Go forward in history
-            debug_redraw(
-                debug_state,
-                instruction,
-                instruction_raw,
-                n_instructions_executed,
-            );
             if debug_state.history.is_empty() {
                 print!("\x1b[2K\r> ");
                 io::stdout().flush().unwrap();
@@ -96,7 +88,8 @@ fn get_line(
                 current_history_idx = current_history_idx.saturating_sub(1);
             }
             let a = debug_state.history.len() - current_history_idx;
-            print!(
+
+            let message = format!(
                 "\x1b[2K\r> {}",
                 if a < debug_state.history.len() {
                     debug_state.history[debug_state.history.len() - current_history_idx].clone()
@@ -104,7 +97,7 @@ fn get_line(
                     "".to_string()
                 }
             );
-            io::stdout().flush().unwrap();
+            print_message(message);
         }
         if let Some(line) = debug_state.reader.readline() {
             return line;
@@ -126,12 +119,7 @@ pub fn debug_terminal(
         print!("\x1b[1A\x1b[2C");
         io::stdout().flush().unwrap();
 
-        let mut line = get_line(
-            debug_state,
-            n_instructions_executed,
-            instruction,
-            instruction_raw,
-        );
+        let mut line = get_line(debug_state);
         // let mut line = String::new();
         // io::stdin().read_line(&mut line).unwrap();
 
