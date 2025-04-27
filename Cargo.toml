@@ -1,7 +1,16 @@
+[[bin]]
+name = "c8rs"
+path = "src/main.rs"
+
 [package]
-name = "chip-8"
+name = "c8rs"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-device_query = "3.0.1"
+c8util = { workspace = true }
+device_query = { workspace = true }
+
+[lints]
+workspace = true
+

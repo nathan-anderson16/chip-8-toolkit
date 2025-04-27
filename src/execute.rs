@@ -2,13 +2,15 @@ use std::{collections::HashSet, time::SystemTime};
 
 use device_query::Keycode;
 
+use c8util::{instructions::Instruction, register::Register};
+
 use crate::{
-    instructions::Instruction,
+    // instructions::Instruction,
     run::{KEYPRESS_MAP, REVERSE_KEYPRESS_MAP},
     system::{
-        DISPLAY_HEIGHT, DISPLAY_WIDTH, Register, get_delay_timer, get_display, get_i,
-        get_memory_u8, get_pc, get_register, set_delay_timer, set_display, set_i, set_memory_u8,
-        set_memory_u16, set_pc, set_register, set_sound_timer, stack_pop, stack_push,
+        DISPLAY_HEIGHT, DISPLAY_WIDTH, get_delay_timer, get_display, get_i, get_memory_u8, get_pc,
+        get_register, set_delay_timer, set_display, set_i, set_memory_u8, set_memory_u16, set_pc,
+        set_register, set_sound_timer, stack_pop, stack_push,
     },
 };
 

@@ -1,8 +1,10 @@
-use core::panic;
+// use core::panic;
 use std::{
-    fmt::Display,
+    // fmt::Display,
     sync::{LazyLock, Mutex},
 };
+
+use c8util::register::Register;
 
 /// Creates getters and setters for the given value.
 #[macro_export]
@@ -175,75 +177,6 @@ pub fn set_sound_timer(val: u8) {
 
 pub fn decrement_sound_timer() {
     unsafe { SOUND_TIMER = SOUND_TIMER.saturating_sub(1) }
-}
-
-/// Registers
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Register {
-    V0 = 0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-    V8,
-    V9,
-    VA,
-    VB,
-    VC,
-    VD,
-    VE,
-    /// Also used as the flag register.
-    VF,
-}
-
-impl From<u8> for Register {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => Self::V0,
-            1 => Self::V1,
-            2 => Self::V2,
-            3 => Self::V3,
-            4 => Self::V4,
-            5 => Self::V5,
-            6 => Self::V6,
-            7 => Self::V7,
-            8 => Self::V8,
-            9 => Self::V9,
-            0xA => Self::VA,
-            0xB => Self::VB,
-            0xC => Self::VC,
-            0xD => Self::VD,
-            0xE => Self::VE,
-            0xF => Self::VF,
-            _ => panic!("value {value} could not be converted to register"),
-        }
-    }
-}
-
-impl Display for Register {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::V0 => f.write_str("V0"),
-            Self::V1 => f.write_str("V1"),
-            Self::V2 => f.write_str("V2"),
-            Self::V3 => f.write_str("V3"),
-            Self::V4 => f.write_str("V4"),
-            Self::V5 => f.write_str("V5"),
-            Self::V6 => f.write_str("V6"),
-            Self::V7 => f.write_str("V7"),
-            Self::V8 => f.write_str("V8"),
-            Self::V9 => f.write_str("V9"),
-            Self::VA => f.write_str("VA"),
-            Self::VB => f.write_str("VB"),
-            Self::VC => f.write_str("VC"),
-            Self::VD => f.write_str("VD"),
-            Self::VE => f.write_str("VE"),
-            Self::VF => f.write_str("VF"),
-        }
-    }
 }
 
 pub static mut REGISTERS: [u8; 16] = [0u8; 16];

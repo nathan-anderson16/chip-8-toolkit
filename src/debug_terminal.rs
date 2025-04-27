@@ -7,8 +7,9 @@ use std::{
 
 use device_query::{DeviceQuery, DeviceState, Keycode};
 
+use c8util::instructions::Instruction;
+
 use crate::{
-    instructions::Instruction,
     run::{draw, print_debug},
     stdin::NonblockingReader,
     system::{
@@ -44,12 +45,12 @@ pub struct DebugState {
     pub last_pressed_keys: Vec<Keycode>,
 }
 
-fn print_message(message: String) {
-    print!("\x1b[2K\r>");
+fn print_message(debug_state: &mut DebugState, message: String) {
+    print!("\x1b[2K\r> ");
     // This is necessary to clear the [[^A that's printed when arrow keys are pressed
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(1));
-        print!("\x1b[2K\r> {}", message);
+        print!("\x1b[2K\r> {message}");
         io::stdout().flush().unwrap();
     });
 }
@@ -60,6 +61,7 @@ fn get_line(debug_state: &mut DebugState) -> String {
     let mut current_history_idx = 0usize;
     loop {
         let keys = device_state.get_keys();
+
         // History management
         if keys.contains(&Keycode::Up) && !debug_state.last_pressed_keys.contains(&Keycode::Up) {
             // Go back in history
@@ -73,8 +75,10 @@ fn get_line(debug_state: &mut DebugState) -> String {
                 .min(debug_state.history.len());
             let message =
                 debug_state.history[debug_state.history.len() - current_history_idx].clone();
-            print_message(message);
+            debug_state.reader.set_contents(message.clone());
+            print_message(debug_state, message);
         }
+
         if keys.contains(&Keycode::Down) && !debug_state.last_pressed_keys.contains(&Keycode::Down)
         {
             // Go forward in history
@@ -94,19 +98,22 @@ fn get_line(debug_state: &mut DebugState) -> String {
                 if a < debug_state.history.len() {
                     debug_state.history[debug_state.history.len() - current_history_idx].clone()
                 } else {
-                    "".to_string()
+                    String::new()
                 }
             );
-            print_message(message);
+            debug_state.reader.set_contents(message.clone());
+            print_message(debug_state, message);
         }
         if let Some(line) = debug_state.reader.readline() {
             return line;
         }
+
         debug_state.last_pressed_keys = keys;
     }
 }
 
 /// Handles the debug terminal, and returns whether debug mode should stay enabled.
+#[allow(clippy::too_many_lines)]
 pub fn debug_terminal(
     n_instructions_executed: &mut u128,
     instruction: Instruction,
@@ -138,7 +145,7 @@ pub fn debug_terminal(
             debug_state.history.push(line.trim().to_string());
         }
 
-        let args = line.trim().split(" ").collect::<Vec<_>>();
+        let args = line.trim().split(' ').collect::<Vec<_>>();
         match args[0] {
             // Print help
             "h" | "help" => {
@@ -146,8 +153,8 @@ pub fn debug_terminal(
                 debug_state.last_debug_command.push_str(line.trim());
                 if args.len() > 1 {
                     print!("Unexpected args for command {}: ", args[0]);
-                    for arg in args[1..].iter() {
-                        print!("{} ", arg);
+                    for arg in &args[1..] {
+                        print!("{arg} ");
                     }
                     println!();
                     continue;

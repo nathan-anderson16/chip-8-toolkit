@@ -1,6 +1,6 @@
 use std::{env, process::exit};
 
-use chip_8::{
+use c8rs::{
     init::{init, set_rom_path},
     run::run,
 };

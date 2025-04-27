@@ -8,14 +8,15 @@ use std::{
 
 use device_query::{DeviceQuery, DeviceState, Keycode};
 
+use c8util::{decode::decode, instructions::Instruction, register::Register};
+
 use crate::{
     debug_terminal::{DebugState, debug_terminal},
-    decode::decode,
     execute::execute,
-    instructions::Instruction,
+    instructions::FancyInstruction,
     stdin::NonblockingReader,
     system::{
-        DISPLAY_HEIGHT, DISPLAY_WIDTH, Register, decrement_delay_timer, decrement_sound_timer,
+        DISPLAY_HEIGHT, DISPLAY_WIDTH, decrement_delay_timer, decrement_sound_timer,
         get_delay_timer, get_display, get_full_display, get_i, get_memory_u8, get_memory_u16,
         get_pc, get_register, get_registers, get_sound_timer, get_stack, peek_stack, set_pc,
     },
@@ -276,6 +277,7 @@ pub fn draw(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn print_debug(
     n_instructions_executed: &mut u128,
     instruction: Instruction,
@@ -304,19 +306,19 @@ pub fn print_debug(
     for instruction in debug_state.last_instructions.iter().rev() {
         info!(
             info_lines,
-            "| \x1b[2;37m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+            "| \x1b[2;37m{:#06X}: {:#04X} -> {}\x1b[0m",
             instruction.0,
             instruction.1,
-            instruction.2
+            instruction.2.fancy_fmt()
         );
     }
     // Current instruction
     info!(
         info_lines,
-        "| \x1b[1;32m{:#06X}: {:#04X} -> {:?}\x1b[0m",
+        "| \x1b[1;32m{:#06X}: {:#04X} -> {}\x1b[0m",
         get_pc().saturating_sub(2),
         instruction_raw,
-        instruction
+        instruction.fancy_fmt()
     );
     // Next instruction
     let mut next_instruction;
@@ -326,10 +328,10 @@ pub fn print_debug(
         if let Some(ins) = next_instruction {
             info!(
                 info_lines,
-                "| {:#06X}: {:#04X} -> {:?}",
+                "| {:#06X}: {:#04X} -> {}",
                 next_addr,
                 get_memory_u16(next_addr),
-                ins
+                ins.fancy_fmt()
             );
         } else {
             info!(
