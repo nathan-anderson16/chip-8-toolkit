@@ -113,6 +113,10 @@ fn get_line(debug_state: &mut DebugState) -> String {
 }
 
 /// Handles the debug terminal, and returns whether debug mode should stay enabled.
+///
+/// # Panics
+///
+/// -
 #[allow(clippy::too_many_lines)]
 pub fn debug_terminal(
     n_instructions_executed: &mut u128,
@@ -253,8 +257,8 @@ pub fn debug_terminal(
             "c" | "continue" => {
                 if args.len() > 1 {
                     print!("Unexpected args for command {}: ", args[0]);
-                    for arg in args[1..].iter() {
-                        print!("{} ", arg);
+                    for arg in &args[1..] {
+                        print!("{arg} ");
                     }
                     println!();
                     continue;
@@ -271,8 +275,8 @@ pub fn debug_terminal(
                 debug_state.last_debug_command.push_str(line.trim());
                 if args.len() > 1 {
                     print!("Unexpected args for command {}: ", args[0]);
-                    for arg in args[1..].iter() {
-                        print!("{} ", arg);
+                    for arg in &args[1..] {
+                        print!("{arg} ");
                     }
                     println!();
                     continue;
@@ -295,11 +299,9 @@ pub fn debug_terminal(
                 };
 
                 if addr & 0x0FFF != addr {
-                    println!(
-                        "address {:#06X} is too large to jump to (should be 12 bits)",
-                        addr
-                    );
+                    println!("address {addr:#06X} is too large to jump to (should be 12 bits)",);
                 }
+                #[allow(clippy::cast_possible_truncation)]
                 set_pc(addr as u16);
                 debug_redraw(
                     debug_state,
@@ -329,14 +331,14 @@ pub fn debug_terminal(
                         println!("invalid usage of command {}", args[0]);
                         continue;
                     }
-                    let reg_idx = match usize::from_str_radix(&args[1][1..2], 16) {
+                    let reg_idx = match u8::from_str_radix(&args[1][1..2], 16) {
                         Ok(val) => val,
                         Err(e) => {
                             println!("could not parse hex value {}: {}", args[1], e);
                             continue;
                         }
                     };
-                    println!("{:#04X}", get_register((reg_idx as u8).into()));
+                    println!("{:#04X}", get_register((reg_idx).into()));
                     continue;
                 }
                 match args[1] {
@@ -359,11 +361,10 @@ pub fn debug_terminal(
                         };
                         if addr & 0x0FFF != addr {
                             println!(
-                                "address {:#06X} is too large to jump to (should be 12 bits)",
-                                addr
+                                "address {addr:#06X} is too large to jump to (should be 12 bits)",
                             );
                         }
-                        println!("{:#04X}", get_memory_u8(addr as u16));
+                        println!("{:#04X}", get_memory_u8(u16::try_from(addr).unwrap()));
                     }
                 }
                 continue;
@@ -391,7 +392,7 @@ pub fn debug_terminal(
                         println!("invalid usage of command {}", args[0]);
                         continue;
                     }
-                    let reg_idx = match usize::from_str_radix(&args[1][1..2], 16) {
+                    let reg_idx = match u8::from_str_radix(&args[1][1..2], 16) {
                         Ok(val) => val,
                         Err(e) => {
                             println!("could not parse hex value {}: {}", args[1], e);
@@ -405,7 +406,7 @@ pub fn debug_terminal(
                         );
                         continue;
                     }
-                    set_register((reg_idx as u8).into(), val as u8);
+                    set_register((reg_idx as u8).into(), u8::try_from(val).unwrap());
                     debug_redraw(
                         debug_state,
                         instruction,
@@ -423,7 +424,7 @@ pub fn debug_terminal(
                             );
                             continue;
                         }
-                        set_i(val as u16);
+                        set_i(u16::try_from(val).unwrap());
                         debug_redraw(
                             debug_state,
                             instruction,
@@ -441,7 +442,7 @@ pub fn debug_terminal(
                             );
                             continue;
                         }
-                        set_pc(val as u16);
+                        set_pc(u16::try_from(val).unwrap());
                         debug_redraw(
                             debug_state,
                             instruction,
@@ -458,7 +459,7 @@ pub fn debug_terminal(
                             );
                             continue;
                         }
-                        set_delay_timer(val as u8);
+                        set_delay_timer(u8::try_from(val).unwrap());
                         debug_redraw(
                             debug_state,
                             instruction,
@@ -475,7 +476,7 @@ pub fn debug_terminal(
                             );
                             continue;
                         }
-                        set_sound_timer(val as u8);
+                        set_sound_timer(u8::try_from(val).unwrap());
                         debug_redraw(
                             debug_state,
                             instruction,
@@ -491,8 +492,7 @@ pub fn debug_terminal(
                         };
                         if addr & 0x0FFF != addr {
                             println!(
-                                "address {:#06X} is too large to jump to (should be 12 bits)",
-                                addr
+                                "address {addr:#06X} is too large to jump to (should be 12 bits)",
                             );
                             continue;
                         }
@@ -503,7 +503,7 @@ pub fn debug_terminal(
                             );
                             continue;
                         }
-                        set_memory_u8(addr as u16, val as u8);
+                        set_memory_u8(u16::try_from(addr).unwrap(), u8::try_from(val).unwrap());
                         continue;
                     }
                 }
@@ -521,12 +521,11 @@ pub fn debug_terminal(
                 };
                 if addr & 0x0FFF != addr {
                     println!(
-                        "address {:#06X} is too large to push to stack (should be 12 bits)",
-                        addr
+                        "address {addr:#06X} is too large to push to stack (should be 12 bits)",
                     );
                     continue;
                 }
-                stack_push(addr as u16);
+                stack_push(u16::try_from(addr).unwrap());
                 debug_redraw(
                     debug_state,
                     instruction,
@@ -545,7 +544,7 @@ pub fn debug_terminal(
                         continue;
                     }
                     Some(val) => {
-                        println!("{:#06X}", val);
+                        println!("{val:#06X}");
                         debug_redraw(
                             debug_state,
                             instruction,
@@ -577,7 +576,7 @@ pub fn debug_terminal(
                         let mut breakpoints = debug_state.breakpoints.iter().collect::<Vec<_>>();
                         breakpoints.sort();
                         for b in breakpoints {
-                            println!("{:#06X}", b);
+                            println!("{b:#06X}");
                         }
                     }
                     // Delete a breakpoint
@@ -593,8 +592,11 @@ pub fn debug_terminal(
                             // This address will never be in breakpoints
                             continue;
                         }
-                        if !debug_state.breakpoints.remove(&(addr as u16)) {
-                            println!("address {:#06X} was not a breakpoint", addr);
+                        if !debug_state
+                            .breakpoints
+                            .remove(&(u16::try_from(addr).unwrap()))
+                        {
+                            println!("address {addr:#06X} was not a breakpoint");
                         }
                         continue;
                     }
@@ -608,11 +610,11 @@ pub fn debug_terminal(
                             continue;
                         };
                         if addr & 0x0FFF != addr {
-                            println!("address {:#06X} is too large (should be 12 bits)", addr);
+                            println!("address {addr:#06X} is too large (should be 12 bits)");
                             continue;
                         }
-                        if !debug_state.breakpoints.insert(addr as u16) {
-                            println!("address {:#06X} was already a breakpoint", addr);
+                        if !debug_state.breakpoints.insert(u16::try_from(addr).unwrap()) {
+                            println!("address {addr:#06X} was already a breakpoint");
                         }
                         continue;
                     }
@@ -638,7 +640,7 @@ pub fn debug_terminal(
                         }
                         print!("{:#06X}:  ", addr + i);
                     }
-                    print!("{:#04X} ", get_memory_u8((addr + i) as u16));
+                    print!("{:#04X} ", get_memory_u8(u16::try_from(addr + i).unwrap()));
                 }
                 println!();
                 continue;
@@ -689,7 +691,7 @@ fn str_to_num(addr: &str) -> Option<usize> {
         match usize::from_str_radix(&addr[2..], 16) {
             Ok(val) => Some(val),
             Err(e) => {
-                println!("could not parse hex value {}: {}", addr, e);
+                println!("could not parse hex value {addr}: {e}");
                 None
             }
         }
@@ -697,7 +699,7 @@ fn str_to_num(addr: &str) -> Option<usize> {
         match usize::from_str_radix(&addr[2..], 2) {
             Ok(val) => Some(val),
             Err(e) => {
-                println!("could not parse binary value {}: {}", addr, e);
+                println!("could not parse binary value {addr}: {e}");
                 None
             }
         }
@@ -705,7 +707,7 @@ fn str_to_num(addr: &str) -> Option<usize> {
         match addr.parse::<usize>() {
             Ok(val) => Some(val),
             Err(e) => {
-                println!("could not parse base 10 value {}: {}", addr, e);
+                println!("could not parse base 10 value {addr}: {e}");
                 None
             }
         }
