@@ -43,6 +43,7 @@ macro_rules! infop {
 }
 
 /// Handles the core loop.
+#[allow(clippy::too_many_lines)]
 pub fn run() {
     for _ in 0..DISPLAY_HEIGHT + 5 {
         println!();
@@ -137,7 +138,7 @@ pub fn run() {
 
         // Update keyboard state
         let keys = device_state.get_keys();
-        last_pressed_keys = pressed_keys.clone();
+        last_pressed_keys.clone_from(&pressed_keys);
         pressed_keys.clear();
         for key in keys {
             pressed_keys.insert(key);
@@ -199,6 +200,7 @@ pub fn run() {
         }
 
         // Delay for 1/720 of a second
+        #[allow(clippy::cast_precision_loss)]
         thread::sleep(Duration::from_secs_f32(1.0 / INSTRUCTION_SPEED as f32));
 
         // Draw
@@ -248,7 +250,7 @@ pub fn draw(
         for y in 0..DISPLAY_HEIGHT {
             print!("|");
             for (x, old_row) in old_display_state.iter().enumerate() {
-                let is_set = get_display(x as u8, y as u8);
+                let is_set = get_display(u8::try_from(x).unwrap(), u8::try_from(y).unwrap());
                 let is_old_set = old_row[y];
                 if is_set && is_old_set {
                     print!("\x1b[47m  \x1b[0m");
@@ -352,17 +354,17 @@ pub fn print_debug(
     );
     for (i, old_reg) in debug_state.old_register_state.iter().enumerate() {
         // Register
-        let reg = get_register((i as u8).into());
+        let reg = get_register(u8::try_from(i).unwrap().into());
 
-        if *old_reg != reg {
+        if *old_reg == reg {
+            // Register did not change
+            info!(info_lines, "| V{:X}: {:#04X}          |", i, reg);
+        } else {
             // Register changed
             info!(
                 info_lines,
                 "| \x1b[32mV{:X}: {:#04X}   \x1b[2;37m{:#04X}\x1b[0m   |", i, reg, old_reg
             );
-        } else {
-            // Register did not change
-            info!(info_lines, "| V{:X}: {:#04X}          |", i, reg);
         }
 
         // Stack
@@ -389,7 +391,15 @@ pub fn print_debug(
     );
     // I
     let i_state = (get_i(), get_memory_u8(get_i()), get_memory_u8(get_i() + 2));
-    if debug_state.old_i_state != i_state {
+    if debug_state.old_i_state == i_state {
+        info!(
+            info_lines,
+            "| I: {:#06X} -> {:#04X} {:#04X}                                |",
+            i_state.0,
+            i_state.1,
+            i_state.2
+        );
+    } else {
         info!(
             info_lines,
             "| \x1b[32mI: {:#06X} -> {:#04X} {:#04X}  \x1b[2;37m{:#06X} -> {:#04X} {:#04X}\x1b[0m           |",
@@ -399,14 +409,6 @@ pub fn print_debug(
             debug_state.old_i_state.0,
             debug_state.old_i_state.1,
             debug_state.old_i_state.2
-        );
-    } else {
-        info!(
-            info_lines,
-            "| I: {:#06X} -> {:#04X} {:#04X}                                |",
-            i_state.0,
-            i_state.1,
-            i_state.2
         );
     }
     info!(
@@ -422,12 +424,13 @@ fn predict_instruction(addr: u16) -> (Option<Instruction>, u16) {
         return (None, addr + 2);
     };
     match ins {
-        Instruction::Jump(nnn) => (decode(get_memory_u16(nnn)), nnn),
+        Instruction::Jump(nnn) | Instruction::SubroutineCall(nnn) => {
+            (decode(get_memory_u16(nnn)), nnn)
+        }
         Instruction::JumpOffset(nnn) => (
-            decode(get_memory_u16(get_register(Register::V0) as u16 + nnn)),
+            decode(get_memory_u16(u16::from(get_register(Register::V0)) + nnn)),
             nnn,
         ),
-        Instruction::SubroutineCall(nnn) => (decode(get_memory_u16(nnn)), nnn),
         Instruction::SubroutineReturn => {
             if let Some(s) = peek_stack() {
                 (decode(get_memory_u16(s)), s)

@@ -49,7 +49,7 @@ impl FancyInstruction for Instruction {
             ),
 
             Self::SetRegister(vx, nn) => {
-                format!("SetRegister({vx}, {:#04X})", nn)
+                format!("SetRegister({vx}, {nn:#04X})")
             }
             Self::Add(vx, nn) => format!(
                 "SetRegister({vx} -> {:#04X}, {:#04X})",
@@ -102,9 +102,9 @@ impl FancyInstruction for Instruction {
                 get_register(vx),
                 get_register(vy)
             ),
-            Self::SetIndexRegister(nnn) => format!("SetI({:#06X})", nnn),
-            Self::JumpOffset(nnn) => format!("JumpOffset({:#06X})", nnn),
-            Self::Random(vx, nn) => format!("Random({vx}, {:#04X})", nn),
+            Self::SetIndexRegister(nnn) => format!("SetI({nnn:#06X})"),
+            Self::JumpOffset(nnn) => format!("JumpOffset({nnn:#06X})"),
+            Self::Random(vx, nn) => format!("Random({vx}, {nn:#04X})"),
             Self::Draw(vx, vy, n) => format!(
                 "Draw({vx} -> {:#04X}, {vy} -> {:#04X}, {:#04X})",
                 get_register(vx),
@@ -149,187 +149,3 @@ impl FancyInstruction for Instruction {
         }
     }
 }
-
-// impl Debug for Instruction {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match *self {
-//             Self::ExecuteMachineLanguageRoutine => {
-//                 f.write_str("ExecuteMachineLanguageRoutine (Invalid)")
-//             }
-//             Self::Clear => f.write_str("Clear"),
-//             Self::SubroutineReturn => f.write_str("SubroutineReturn"),
-//             Self::Jump(nnn) => {
-//                 let instruction_raw = get_memory_u16(nnn);
-//                 let instruction = decode(instruction_raw);
-//                 if let Some(ins) = instruction {
-//                     f.write_str(format!("Jump({:#06X}) -> {:?}", nnn, ins).as_str())
-//                 } else {
-//                     f.write_str(format!("Jump({:#06X}) -> (invalid)", nnn,).as_str())
-//                 }
-//             }
-//             Self::SubroutineCall(nnn) => {
-//                 f.write_str(format!("SubroutineCall({:#06X})", nnn).as_str())
-//             }
-//             Self::SkipConditional1(vx, nn) => f.write_str(
-//                 format!("SkipEqual({vx} -> {:#04X}, {:#04X})", get_register(vx), nn).as_str(),
-//             ),
-//             Self::SkipConditional2(vx, nn) => f.write_str(
-//                 format!(
-//                     "SkipNotEqual({vx} -> {:#04X}, {:#04X})",
-//                     get_register(vx),
-//                     nn
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::SkipConditional3(vx, vy) => f.write_str(
-//                 format!(
-//                     "SkipEqual({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::SetRegister(vx, nn) => {
-//                 f.write_str(format!("SetRegister({vx}, {:#04X})", nn).as_str())
-//             }
-//             Self::Add(vx, nn) => f.write_str(
-//                 format!(
-//                     "SetRegister({vx} -> {:#04X}, {:#04X})",
-//                     get_register(vx),
-//                     nn
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::RegSet(vx, vy) => f.write_str(
-//                 format!("SetRegister({vx}, {vy} -> {:#04X})", get_register(vy)).as_str(),
-//             ),
-//             Self::BinaryOr(vx, vy) => f.write_str(
-//                 format!(
-//                     "BinaryOr({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::BinaryAnd(vx, vy) => f.write_str(
-//                 format!(
-//                     "BinaryAnd({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::BinaryXor(vx, vy) => f.write_str(
-//                 format!(
-//                     "BinaryXor({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::RegAdd(vx, vy) => f.write_str(
-//                 format!(
-//                     "Add({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::Subtract1(vx, vy) => f.write_str(
-//                 format!(
-//                     "Subtract({vx} -> {:#04X}, {vy} -> {:#04X}) ({vx} - {vy})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::ShiftRight(vx, vy) => f.write_str(
-//                 format!(
-//                     "ShiftRight({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::Subtract2(vx, vy) => f.write_str(
-//                 format!(
-//                     "Subtract({vx} -> {:#04X}, {vy} -> {:#04X}) ({vy} - {vx})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::ShiftLeft(vx, vy) => f.write_str(
-//                 format!(
-//                     "ShiftLeft({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::SkipConditional4(vx, vy) => f.write_str(
-//                 format!(
-//                     "SkipNotEqual({vx} -> {:#04X}, {vy} -> {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy)
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::SetIndexRegister(nnn) => f.write_str(format!("SetI({:#06X})", nnn).as_str()),
-//             Self::JumpOffset(nnn) => f.write_str(format!("JumpOffset({:#06X})", nnn).as_str()),
-//             Self::Random(vx, nn) => f.write_str(format!("Random({vx}, {:#04X})", nn).as_str()),
-//             Self::Draw(vx, vy, n) => f.write_str(
-//                 format!(
-//                     "Draw({vx} -> {:#04X}, {vy} -> {:#04X}, {:#04X})",
-//                     get_register(vx),
-//                     get_register(vy),
-//                     n
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::SkipIfKey(vx) => f.write_str(
-//                 format!(
-//                     "SkipIfKey({vx} -> {:#04X} ({:?}))",
-//                     get_register(vx),
-//                     REVERSE_KEYPRESS_MAP
-//                         .get()
-//                         .unwrap()
-//                         .get(&get_register(vx))
-//                         .unwrap()
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::SkipIfNotKey(vx) => f.write_str(
-//                 format!(
-//                     "SkipIfNotKey({vx} -> {:#04X} ({:?}))",
-//                     get_register(vx),
-//                     REVERSE_KEYPRESS_MAP
-//                         .get()
-//                         .unwrap()
-//                         .get(&get_register(vx))
-//                         .unwrap()
-//                 )
-//                 .as_str(),
-//             ),
-//             Self::GetDelayTimer(vx) => f.write_str(format!("GetDelayTimer({vx})").as_str()),
-//             Self::GetKey(vx) => f.write_str(format!("GetKey({vx})").as_str()),
-//             Self::SetDelayTimer(vx) => {
-//                 f.write_str(format!("SetDelayTimer({vx} -> {:#04X})", get_register(vx)).as_str())
-//             }
-//             Self::SetSoundTimer(vx) => {
-//                 f.write_str(format!("SetSoundTimer({vx} -> {:#04X})", get_register(vx)).as_str())
-//             }
-//             Self::AddToIndex(vx) => {
-//                 f.write_str(format!("AddToI({vx} -> {:#04X})", get_register(vx)).as_str())
-//             }
-//             Self::FontCharacter(vx) => {
-//                 f.write_str(format!("FontAddress({vx} -> {:#04X})", get_register(vx)).as_str())
-//             }
-//             Self::BCD(vx) => f.write_str(
-//                 format!("BinaryCodedDecimal({vx} -> {:#04X})", get_register(vx)).as_str(),
-//             ),
-//             Self::StoreMemory(n) => f.write_str(format!("StoreMemory({n})").as_str()),
-//             Self::LoadMemory(n) => f.write_str(format!("LoadMemory({n})").as_str()),
-//         }
-//     }
-// }

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::SystemTime};
+use std::{collections::HashSet, hash::RandomState, time::SystemTime};
 
 use device_query::Keycode;
 
@@ -14,10 +14,11 @@ use crate::{
     },
 };
 
+#[allow(clippy::too_many_lines)]
 pub fn execute(
     instruction: Instruction,
-    pressed_keys: &HashSet<Keycode>,
-    last_pressed_keys: &HashSet<Keycode>,
+    pressed_keys: &HashSet<Keycode, RandomState>,
+    last_pressed_keys: &HashSet<Keycode, RandomState>,
     n_instructions_executed: u128,
 ) {
     match instruction {
@@ -30,7 +31,7 @@ pub fn execute(
             // println!("Executing instruction: clear");
             for i in 0..DISPLAY_WIDTH {
                 for j in 0..DISPLAY_HEIGHT {
-                    set_display(i as u8, j as u8, false);
+                    set_display(u8::try_from(i).unwrap(), u8::try_from(j).unwrap(), false);
                 }
             }
         }
@@ -74,7 +75,7 @@ pub fn execute(
         // 6XNN
         Instruction::SetRegister(vx, nn) => {
             // println!("Executing instruction: set register ({reg:?}) ({val})");
-            set_register(vx, nn)
+            set_register(vx, nn);
         }
         // 7XNN
         Instruction::Add(vx, nn) => {
@@ -106,42 +107,35 @@ pub fn execute(
         }
         // 8XY4
         Instruction::RegAdd(vx, vy) => {
-            let sum = get_register(vx) as u16 + get_register(vy) as u16;
+            let sum = u16::from(get_register(vx)) + u16::from(get_register(vy));
             set_register(vx, (sum % 255) as u8);
-            set_register(Register::VF, if sum > 255 { 1 } else { 0 });
+            set_register(Register::VF, u8::from(sum > 255));
         }
         // 8XY5
         Instruction::Subtract1(vx, vy) => {
-            let subbed = get_register(vx) as i16 - get_register(vy) as i16;
+            let subbed = i16::from(get_register(vx)) - i16::from(get_register(vy));
             set_register(vx, get_register(vx).wrapping_sub(get_register(vy)));
-            set_register(Register::VF, if subbed < 0 { 0 } else { 1 });
+            set_register(Register::VF, u8::from(subbed >= 0));
         }
         // 8XY6
         Instruction::ShiftRight(vx, vy) => {
             set_register(vx, get_register(vy)); // TODO: Add option to disable
             let old_vx = get_register(vx);
-            set_register(vx, (get_register(vx) >> 1) & 0b01111111);
+            set_register(vx, (get_register(vx) >> 1) & 0b0111_1111);
             set_register(Register::VF, old_vx & 1);
         }
         // 8XY7
         Instruction::Subtract2(vx, vy) => {
-            let subbed = get_register(vy) as i16 - get_register(vx) as i16;
+            let subbed = i16::from(get_register(vy)) - i16::from(get_register(vx));
             set_register(vx, get_register(vy).wrapping_sub(get_register(vx)));
-            set_register(Register::VF, if subbed < 0 { 0 } else { 1 });
+            set_register(Register::VF, u8::from(subbed >= 0));
         }
         // 8XYE
         Instruction::ShiftLeft(vx, vy) => {
             set_register(vx, get_register(vy)); // TODO: Add option to disable
             let old_vx = get_register(vx);
-            set_register(vx, (get_register(vx) << 1) & 0b11111110);
-            set_register(
-                Register::VF,
-                if old_vx & 0b10000000 == 0b10000000 {
-                    1
-                } else {
-                    0
-                },
-            );
+            set_register(vx, (get_register(vx) << 1) & 0b1111_1110);
+            set_register(Register::VF, u8::from(old_vx & 0b1000_0000 == 0b1000_0000));
         }
         // 9XY0
         Instruction::SkipConditional4(vx, vy) => {
@@ -156,7 +150,7 @@ pub fn execute(
         }
         // BNNN
         Instruction::JumpOffset(nnn) => {
-            set_pc(nnn + get_register(Register::V0) as u16);
+            set_pc(nnn + u16::from(get_register(Register::V0)));
         }
         // CXNN
         Instruction::Random(vx, nnn) => {
@@ -165,7 +159,8 @@ pub fn execute(
                 .unwrap();
             let timestamp_nanos = duration_since_epoch.as_nanos();
 
-            set_register(vx, (timestamp_nanos & (nnn as u128)) as u8);
+            #[allow(clippy::cast_possible_truncation)]
+            set_register(vx, (timestamp_nanos & u128::from(nnn)) as u8);
         }
         // DXYN
         Instruction::Draw(vx, vy, n) => {
@@ -177,8 +172,8 @@ pub fn execute(
             set_register(Register::VF, 0);
 
             let sprite_location = get_i();
-            let x = get_register(vx) % DISPLAY_WIDTH as u8;
-            let y = get_register(vy) % DISPLAY_HEIGHT as u8;
+            let x = get_register(vx) % u8::try_from(DISPLAY_WIDTH).unwrap();
+            let y = get_register(vy) % u8::try_from(DISPLAY_HEIGHT).unwrap();
 
             // Draw each pixel to the screen
             for i in 0..n {
@@ -186,7 +181,7 @@ pub fn execute(
                 if display_y as usize >= DISPLAY_HEIGHT {
                     continue;
                 }
-                let sprite_val = get_memory_u8(sprite_location + i as u16);
+                let sprite_val = get_memory_u8(sprite_location + u16::from(i));
 
                 for j in (0..8).rev() {
                     let display_x = x + 8 - j - 1;
@@ -244,7 +239,7 @@ pub fn execute(
         }
         // FX1E
         Instruction::AddToIndex(vx) => {
-            set_i(get_i() + get_register(vx) as u16);
+            set_i(get_i() + u16::from(get_register(vx)));
         }
         // FX0A
         Instruction::GetKey(vx) => {
@@ -257,7 +252,7 @@ pub fn execute(
         // FX29
         Instruction::FontCharacter(vx) => {
             let char = get_register(vx);
-            set_memory_u16(get_i(), 0x50 + (char as u16) * 5);
+            set_memory_u16(get_i(), 0x50 + u16::from(char) * 5);
             // set_pc(0x50 + (char as u16) * 5);
         }
         // FX33

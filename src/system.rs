@@ -1,16 +1,6 @@
-// use core::panic;
-use std::{
-    // fmt::Display,
-    sync::{LazyLock, Mutex},
-};
+use std::sync::{LazyLock, Mutex};
 
 use c8util::register::Register;
-
-/// Creates getters and setters for the given value.
-#[macro_export]
-macro_rules! get_set {
-    () => {};
-}
 
 pub const MEMORY_SIZE: usize = 4096;
 
@@ -20,18 +10,20 @@ pub static mut MEMORY: [u8; MEMORY_SIZE] = [0u8; MEMORY_SIZE];
 /// Get the memory value at the current position.
 pub fn get_memory_u8(addr: u16) -> u8 {
     assert!((addr & 0xf000) == 0, "Address must be 12-bit!");
+    // SAFETY: single threaded
     unsafe { MEMORY[addr as usize] }
 }
 
 /// Return a 16-byte memory value at the current position.
 pub fn get_memory_u16(addr: u16) -> u16 {
     assert!(((addr + 1) & 0xf000) == 0, "Address must be 12-bit!");
-    ((get_memory_u8(addr) as u16) << 8) | get_memory_u8(addr + 1) as u16
+    (u16::from(get_memory_u8(addr)) << 8) | u16::from(get_memory_u8(addr + 1))
 }
 
 /// Set the memory value at the current position.
 pub fn set_memory_u8(addr: u16, val: u8) {
     assert!((addr & 0xf000) == 0, "Address must be 12-bit!");
+    // SAFETY: single threaded
     unsafe {
         MEMORY[addr as usize] = val;
     }
@@ -62,11 +54,13 @@ pub fn get_display(x: u8, y: u8) -> bool {
         "y-coord ({y}) was out of range of display width ({DISPLAY_HEIGHT})"
     );
 
+    // SAFETY: single threaded
     unsafe { DISPLAY[x as usize][y as usize] }
 }
 
 /// Returns the full display.
 pub fn get_full_display() -> [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH] {
+    // SAFETY: single threaded
     unsafe { DISPLAY }
 }
 
@@ -81,6 +75,7 @@ pub fn set_display(x: u8, y: u8, val: bool) {
         "y-coord ({y}) was out of range of display width ({DISPLAY_HEIGHT})"
     );
 
+    // SAFETY: single threaded
     unsafe { DISPLAY[x as usize][y as usize] = val };
 }
 
@@ -88,12 +83,14 @@ pub fn set_display(x: u8, y: u8, val: bool) {
 pub static mut PC: u16 = 0;
 
 pub fn get_pc() -> u16 {
+    // SAFETY: single threaded
     unsafe { PC }
 }
 
 pub fn set_pc(val: u16) {
     assert!((val & 0xF000) == 0, "Address must be 12-bit");
 
+    // SAFETY: single threaded
     unsafe { PC = val };
 }
 
@@ -101,12 +98,14 @@ pub fn set_pc(val: u16) {
 pub static mut I: u16 = 0;
 
 pub fn get_i() -> u16 {
+    // SAFETY: single threaded
     unsafe { I }
 }
 
 pub fn set_i(val: u16) {
     assert!((val & 0xF000) == 0, "Address must be 12-bit");
 
+    // SAFETY: single threaded
     unsafe { I = val };
 }
 
@@ -117,13 +116,15 @@ pub static mut STACK: LazyLock<Mutex<Vec<u16>>> =
     LazyLock::new(|| Mutex::new(Vec::with_capacity(STACK_SIZE)));
 
 pub fn stack_push(val: u16) {
+    // SAFETY: single threaded
     #[allow(static_mut_refs)]
     unsafe {
-        STACK.lock().unwrap().push(val)
+        STACK.lock().unwrap().push(val);
     };
 }
 
 pub fn stack_pop() -> Option<u16> {
+    // SAFETY: single threaded
     #[allow(static_mut_refs)]
     unsafe {
         STACK.lock().unwrap().pop()
@@ -131,6 +132,7 @@ pub fn stack_pop() -> Option<u16> {
 }
 
 pub fn get_stack() -> Vec<u16> {
+    // SAFETY: single threaded
     #[allow(static_mut_refs)]
     unsafe {
         STACK.lock().unwrap().clone()
@@ -138,6 +140,7 @@ pub fn get_stack() -> Vec<u16> {
 }
 
 pub fn peek_stack() -> Option<u16> {
+    // SAFETY: single threaded
     #[allow(static_mut_refs)]
     unsafe {
         let stack = STACK.lock().unwrap();
@@ -153,14 +156,17 @@ pub fn peek_stack() -> Option<u16> {
 pub static mut DELAY_TIMER: u8 = 0;
 
 pub fn get_delay_timer() -> u8 {
+    // SAFETY: single threaded
     unsafe { DELAY_TIMER }
 }
 
 pub fn set_delay_timer(val: u8) {
+    // SAFETY: single threaded
     unsafe { DELAY_TIMER = val }
 }
 
 pub fn decrement_delay_timer() {
+    // SAFETY: single threaded
     unsafe { DELAY_TIMER = DELAY_TIMER.saturating_sub(1) }
 }
 
@@ -168,27 +174,33 @@ pub fn decrement_delay_timer() {
 pub static mut SOUND_TIMER: u8 = 0;
 
 pub fn get_sound_timer() -> u8 {
+    // SAFETY: single threaded
     unsafe { SOUND_TIMER }
 }
 
 pub fn set_sound_timer(val: u8) {
+    // SAFETY: single threaded
     unsafe { SOUND_TIMER = val }
 }
 
 pub fn decrement_sound_timer() {
+    // SAFETY: single threaded
     unsafe { SOUND_TIMER = SOUND_TIMER.saturating_sub(1) }
 }
 
 pub static mut REGISTERS: [u8; 16] = [0u8; 16];
 
 pub fn get_registers() -> [u8; 16] {
+    // SAFETY: single threaded
     unsafe { REGISTERS }
 }
 
 pub fn get_register(reg: Register) -> u8 {
+    // SAFETY: single threaded
     unsafe { REGISTERS[reg as usize] }
 }
 
 pub fn set_register(reg: Register, val: u8) {
+    // SAFETY: single threaded
     unsafe { REGISTERS[reg as usize] = val };
 }

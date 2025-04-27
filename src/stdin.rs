@@ -40,7 +40,7 @@ impl NonblockingReader {
                         println!("Updated: {buf:?}");
                     }
 
-                    if let Some(nl) = buf.find("\n") {
+                    if let Some(nl) = buf.find('\n') {
                         tx.send(buf[..nl].to_string()).unwrap();
                         if buf[nl..].len() > 1 {
                             buf = buf[nl..].to_string();

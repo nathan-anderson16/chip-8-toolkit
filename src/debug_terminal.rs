@@ -45,7 +45,7 @@ pub struct DebugState {
     pub last_pressed_keys: Vec<Keycode>,
 }
 
-fn print_message(debug_state: &mut DebugState, message: String) {
+fn print_message(_debug_state: &mut DebugState, message: String) {
     print!("\x1b[2K\r> ");
     // This is necessary to clear the [[^A that's printed when arrow keys are pressed
     thread::spawn(move || {
@@ -113,10 +113,7 @@ fn get_line(debug_state: &mut DebugState) -> String {
 }
 
 /// Handles the debug terminal, and returns whether debug mode should stay enabled.
-///
-/// # Panics
-///
-/// -
+#[allow(clippy::match_on_vec_items)]
 #[allow(clippy::too_many_lines)]
 pub fn debug_terminal(
     n_instructions_executed: &mut u128,

@@ -5,12 +5,14 @@ use crate::system::{set_memory_u8, set_pc};
 pub static mut ROM_PATH: &str = "";
 
 pub fn set_rom_path(path: &'static str) {
+    // SAFETY: single threaded
     unsafe {
         ROM_PATH = path;
     }
 }
 
 pub fn get_rom_path() -> &'static str {
+    // SAFETY: single threaded
     unsafe { ROM_PATH }
 }
 
@@ -38,13 +40,13 @@ fn init_memory() {
     ];
 
     for (i, item) in font.iter().enumerate() {
-        set_memory_u8((0x50 + i) as u16, *item);
+        set_memory_u8(u16::try_from(0x50 + i).unwrap(), *item);
     }
 
     // Initialize the ROM
     let rom_bytes = fs::read(get_rom_path()).expect("failed to read rom file");
     for (i, item) in rom_bytes.iter().enumerate() {
-        set_memory_u8((0x200 + i) as u16, *item);
+        set_memory_u8(u16::try_from(0x200 + i).unwrap(), *item);
     }
 }
 
