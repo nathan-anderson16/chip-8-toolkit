@@ -22,6 +22,35 @@ pub enum Register {
     VF,
 }
 
+impl From<Register> for u8 {
+    fn from(value: Register) -> Self {
+        match value {
+            Register::V0 => 0,
+            Register::V1 => 1,
+            Register::V2 => 2,
+            Register::V3 => 3,
+            Register::V4 => 4,
+            Register::V5 => 5,
+            Register::V6 => 6,
+            Register::V7 => 7,
+            Register::V8 => 8,
+            Register::V9 => 9,
+            Register::VA => 0xA,
+            Register::VB => 0xB,
+            Register::VC => 0xC,
+            Register::VD => 0xD,
+            Register::VE => 0xE,
+            Register::VF => 0xF,
+        }
+    }
+}
+
+impl From<Register> for u16 {
+    fn from(value: Register) -> Self {
+        Self::from(Into::<u8>::into(value))
+    }
+}
+
 impl From<u8> for Register {
     fn from(value: u8) -> Self {
         match value {

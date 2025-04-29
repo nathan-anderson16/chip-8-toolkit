@@ -19,7 +19,7 @@ pub enum Instruction {
     SkipConditional1(Register, u8),
     /// 4XNN. Increase PC by 2 if the value in the given register is not equal to NN.
     SkipConditional2(Register, u8),
-    /// 5XNN. Increase PC by 2 if the values in the registers are equal.
+    /// 5XY0. Increase PC by 2 if the values in the registers are equal.
     SkipConditional3(Register, Register),
     /// 6XNN. Set the register to the given value.
     SetRegister(Register, u8),
@@ -81,4 +81,69 @@ pub enum Instruction {
     StoreMemory(u8),
     /// FX65. Load the values of each register from V0 to VX, inclusive, at successive memory addresses, starting at I. TODO: Add a compatibility option to increment I each time a register is loaded.
     LoadMemory(u8),
+}
+
+impl Instruction {
+    /// Converts Self to the u16 representation of the instruction.
+    pub fn serialize(&self) -> u16 {
+        match self {
+            Instruction::ExecuteMachineLanguageRoutine => 0x0000,
+            Instruction::Clear => 0x00E0,
+            Instruction::SubroutineReturn => 0x00EE,
+            Instruction::Jump(nnn) => 0x1000 & nnn,
+            Instruction::SubroutineCall(nnn) => 0x2000 & nnn,
+            Instruction::SkipConditional1(vx, nn) => {
+                0x3000 & (u16::from(*vx) << 2) & u16::from(*nn)
+            }
+            Instruction::SkipConditional2(vx, nn) => {
+                0x4000 & (u16::from(*vx) << 2) & u16::from(*nn)
+            }
+            Instruction::SkipConditional3(vx, vy) => {
+                0x5000 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::SetRegister(vx, nn) => 0x6000 & (u16::from(*vx) << 2) & u16::from(*nn),
+            Instruction::Add(vx, nn) => 0x7000 & (u16::from(*vx) << 2) & u16::from(*nn),
+            Instruction::RegSet(vx, vy) => 0x8000 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1),
+            Instruction::BinaryOr(vx, vy) => 0x8001 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1),
+            Instruction::BinaryAnd(vx, vy) => {
+                0x8002 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::BinaryXor(vx, vy) => {
+                0x8003 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::RegAdd(vx, vy) => 0x8004 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1),
+            Instruction::Subtract1(vx, vy) => {
+                0x8005 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::ShiftRight(vx, vy) => {
+                0x8006 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::Subtract2(vx, vy) => {
+                0x8007 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::ShiftLeft(vx, vy) => {
+                0x800E & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::SkipConditional4(vx, vy) => {
+                0x9000 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1)
+            }
+            Instruction::SetIndexRegister(nnn) => 0xA000 & nnn,
+            Instruction::JumpOffset(nnn) => 0xB000 & nnn,
+            Instruction::Random(vx, nn) => 0xC000 & (u16::from(*vx) << 2) & u16::from(*nn),
+            Instruction::Draw(vx, vy, n) => {
+                0xD000 & (u16::from(*vx) << 2) & (u16::from(*vy) << 1) & u16::from(*n)
+            }
+            Instruction::SkipIfKey(vx) => 0xE09E & (u16::from(*vx) << 2),
+            Instruction::SkipIfNotKey(vx) => 0xE0A1 & (u16::from(*vx) << 2),
+            Instruction::GetKey(vx) => 0xF00A & (u16::from(*vx) << 2),
+            Instruction::GetDelayTimer(vx) => 0xF007 & (u16::from(*vx) << 2),
+            Instruction::SetDelayTimer(vx) => 0xF015 & (u16::from(*vx) << 2),
+            Instruction::SetSoundTimer(vx) => 0xF018 & (u16::from(*vx) << 2),
+            Instruction::AddToIndex(vx) => 0xF01E & (u16::from(*vx) << 2),
+            Instruction::FontCharacter(vx) => 0xF029 & (u16::from(*vx) << 2),
+            Instruction::BCD(vx) => 0xF033 & (u16::from(*vx) << 2),
+            Instruction::StoreMemory(vx) => 0xF055 & (u16::from(*vx) << 2),
+            Instruction::LoadMemory(vx) => 0xF065 & (u16::from(*vx) << 2),
+        }
+    }
 }
