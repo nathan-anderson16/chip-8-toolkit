@@ -1,11 +1,8 @@
-[[bin]]
-name = "c8rs"
-path = "src/main.rs"
-
 [package]
 name = "c8rs"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 c8util = { workspace = true }
