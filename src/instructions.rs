@@ -146,6 +146,7 @@ impl FancyInstruction for Instruction {
             Self::BCD(vx) => format!("BinaryCodedDecimal({vx} -> {:#04X})", get_register(vx)),
             Self::StoreMemory(n) => format!("StoreMemory({n})"),
             Self::LoadMemory(n) => format!("LoadMemory({n})"),
+            Self::Db(nnnn) => format!("db {nnnn}"),
         }
     }
 }

@@ -280,5 +280,6 @@ pub fn execute(
                 set_i(get_i() + 1);
             }
         }
+        Instruction::Db(_) => {}
     }
 }
