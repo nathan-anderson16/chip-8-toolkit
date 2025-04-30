@@ -437,7 +437,7 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
         }
         RawInstruction::Draw => {
             if args.len() < 3 {
-                token_panic(ins, "not enough arguments for instruction 'draw'");
+                token_panic(ins, "not enough arguments (expected 3)");
             }
             if args.len() > 3 {
                 token_panic(args[3], "unexpected argument");
@@ -450,12 +450,45 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
             Some(Instruction::Draw(vx, vy, n))
         }
         RawInstruction::Skk | RawInstruction::Sknk | RawInstruction::Key | RawInstruction::Bcd => {
-            todo!()
+            if args.is_empty() {
+                token_panic(ins, "not enough arguments (expected 1)")
+            }
+            if args.len() > 1 {
+                token_panic(args[1], "unexpected argument");
+            }
+
+            let final_instruction = match raw_ins {
+                RawInstruction::Skk => Instruction::SkipIfKey,
+                RawInstruction::Sknk => Instruction::SkipIfNotKey,
+                RawInstruction::Key => Instruction::GetKey,
+                RawInstruction::Bcd => Instruction::BCD,
+                _ => panic!("should never happen"),
+            };
+
+            let vx = validate_token_vx(args[0]);
+            Some(final_instruction(vx))
         }
-        RawInstruction::Store | RawInstruction::Load => todo!(),
+        RawInstruction::Store | RawInstruction::Load => {
+            if args.is_empty() {
+                token_panic(ins, "not enough arguments (expected 1)")
+            }
+            if args.len() > 1 {
+                token_panic(args[1], "unexpected argument");
+            }
+
+            let final_instruction = match raw_ins {
+                RawInstruction::Store => Instruction::StoreMemory,
+                RawInstruction::Load => Instruction::LoadMemory,
+                _ => panic!("should never happen"),
+            };
+
+            let nn = validate_token_nn(args[0]);
+            Some(final_instruction(nn))
+        }
     }
 }
 
+/// Validates that the given token is a Val with size 4 bits or less
 fn validate_token_n(token_info: &TokenInfo) -> u8 {
     match token_info.token {
         Token::Val(n) => validate_u4(n),
@@ -464,6 +497,7 @@ fn validate_token_n(token_info: &TokenInfo) -> u8 {
     }
 }
 
+/// Validates that the given token is a Val with size 8 bits or less
 fn validate_token_nn(token_info: &TokenInfo) -> u8 {
     match token_info.token {
         Token::Val(nn) => validate_u8(nn),
@@ -472,6 +506,7 @@ fn validate_token_nn(token_info: &TokenInfo) -> u8 {
     }
 }
 
+/// Validates that the given token is a Val with size 12 bits or less
 fn validate_token_nnn(token_info: &TokenInfo) -> u16 {
     match token_info.token {
         Token::Val(nnn) => validate_u12(nnn),
@@ -480,6 +515,7 @@ fn validate_token_nnn(token_info: &TokenInfo) -> u16 {
     }
 }
 
+/// Validates that the given token is a VX register
 fn validate_token_vx(token_info: &TokenInfo) -> Register {
     match token_info.token {
         Token::Reg(reg) => validate_vx(token_info, reg),
@@ -488,6 +524,7 @@ fn validate_token_vx(token_info: &TokenInfo) -> Register {
     }
 }
 
+/// Validates that the given register is a VX register
 fn validate_vx(token_info: &TokenInfo, reg: RawRegister) -> Register {
     match reg {
         RawRegister::Reg(vx) => vx,
@@ -510,18 +547,22 @@ fn validate_two<'a>(args: &[&'a TokenInfo], ins: &TokenInfo) -> (&'a TokenInfo, 
     (args[0], args[1])
 }
 
+/// Validates that the given value fits within 4 bits
 fn validate_u4(val: usize) -> u8 {
     validate_addr(val, 0x0F, 4).expect("failed to parse address")
 }
 
+/// Validates that the given value fits within 8 bits
 fn validate_u8(val: usize) -> u8 {
     validate_addr(val, 0xFF, 8).expect("failed to parse address")
 }
 
+/// Validates that the given value fits within 12 bits
 fn validate_u12(val: usize) -> u16 {
     validate_addr(val, 0x0FFF, 12).expect("failed to parse address")
 }
 
+/// Validates that the given value fits within the mask. `n_bits` is used in the error message.
 fn validate_addr<T>(val: usize, mask: T, n_bits: usize) -> Result<T, String>
 where
     T: Copy + Into<usize>,
