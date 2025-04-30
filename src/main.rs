@@ -341,7 +341,72 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
                 }
             }
         }
-        RawInstruction::Mov => todo!(),
+        RawInstruction::Mov => {
+            if args.is_empty() {
+                token_panic(ins, "'mov' instruction missing argument: dst");
+            }
+            if args.len() == 1 {
+                token_panic(ins, "'mov' instruction missing argument: src");
+            }
+            if args.len() > 2 {
+                token_panic(args[2], "unexpected argument");
+            }
+            let dst = args[0];
+            let src = args[1];
+
+            match dst.token {
+                // Moving into a register
+                Token::Reg(dst_reg) => match dst_reg {
+                    // Valid sources: vx, u8, d
+                    RawRegister::Reg(vx) => match dst.token {
+                        Token::Reg(src_reg) => match src_reg {
+                            RawRegister::Reg(vy) => Some(Instruction::RegSet(vx, vy)),
+                            RawRegister::Delay => Some(Instruction::GetDelayTimer(vx)),
+                            RawRegister::Sound => token_panic(src, "invalid source register: $s"),
+                            RawRegister::I => token_panic(src, "invalid source register: $i"),
+                        },
+                        Token::Val(val) => Some(Instruction::SetRegister(
+                            vx,
+                            validate_addr(val, 0xFF, 8).expect("failed to parse address"),
+                        )),
+                        Token::Ins(_) => {
+                            token_panic(src, "expected value or register, found instruction")
+                        }
+                    },
+                    // Valid options: u12
+                    RawRegister::I => match src.token {
+                        Token::Val(nnn) => Some(Instruction::SetIndexRegister(
+                            validate_addr(nnn, 0x0FFF, 12).expect("failed to parse address"),
+                        )),
+                        Token::Ins(_) => token_panic(src, "expected value, found instruction"),
+                        Token::Reg(_) => token_panic(src, "expected value, found register"),
+                    },
+                    // Valid options: vx
+                    RawRegister::Delay => match src.token {
+                        Token::Reg(reg) => match reg {
+                            RawRegister::Reg(vx) => Some(Instruction::SetDelayTimer(vx)),
+                            RawRegister::I | RawRegister::Delay | RawRegister::Sound => {
+                                token_panic(src, "invalid register for dst of $d")
+                            }
+                        },
+                        Token::Ins(_) => token_panic(src, "expected register, found instruction"),
+                        Token::Val(_) => token_panic(src, "expected register, found value"),
+                    },
+                    // Valid options: vx
+                    RawRegister::Sound => match src.token {
+                        Token::Reg(reg) => match reg {
+                            RawRegister::Reg(vx) => Some(Instruction::SetSoundTimer(vx)),
+                            RawRegister::I | RawRegister::Delay | RawRegister::Sound => {
+                                token_panic(src, "invalid register for dst of $s")
+                            }
+                        },
+                        Token::Ins(_) => token_panic(src, "expected register, found instruction"),
+                        Token::Val(_) => token_panic(src, "expected register, found value"),
+                    },
+                },
+                _ => token_panic(dst, "invalid dest for 'mov'"),
+            }
+        }
         RawInstruction::Add => todo!(),
         RawInstruction::Or => todo!(),
         RawInstruction::And => todo!(),
