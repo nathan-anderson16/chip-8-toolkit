@@ -11,10 +11,10 @@ clear: Clear
 
 ret: Subroutine return
 
-jmp addr: Jump
-- jo addr: Jump to addr + V0
+jmp nnn: Jump
+- jo nnn: Jump to nnn + V0
 
-call addr: Subroutine call
+call nnn: Subroutine call
 
 ske: Skip if equal
 - vx, val
@@ -24,7 +24,7 @@ skn: Skip if not equal
 - vx, val (or val, vx)
 - vx, vy
 
-mov a, b: Move b into a
+mov a, b: Copy b into a
 - vx, val
 - vx, vy
 
@@ -38,34 +38,34 @@ add a, b: Add
 - vx, val
 - vx, vy
 
-or a, b: Binary or
+or vx, vy: Binary or
 
-and a, b: Binary and
+and vx, vy: Binary and
 
-xor a, b: Binary xor
+xor vx, vy: Binary xor
 
-sub1 a, b: Subtract1
+sub1 vx, vy: Subtract1
 
-sub2 a, b: Subtract2
+sub2 vx, vy: Subtract2
 
-shr a, b: Shift right
+shr vx, vy: Shift right
 
-shl a, b: Shift left
+shl vx, vy: Shift left
 
-rand: Random
+rand vx, nn: Random
 
-draw a, b, c: Draw
+draw vx, vy, n: Draw
 
-skk a: Skip if key
+skk vx: Skip if key
 
-sknk a: Skip if not key
+sknk vx: Skip if not key
 
-key a: Get key
+key vx: Get key
 
-font a: Font character
+font vx: Font character
 
-bcd a: BCD
+bcd vx: BCD
 
-store a: Store memory
+store nn: Store memory
 
-load a: Load memory
+load nn: Load memory

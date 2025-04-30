@@ -269,75 +269,58 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
             }
             Some(Instruction::SubroutineReturn)
         }
-        RawInstruction::Jmp | RawInstruction::Call => {
+        RawInstruction::Jmp | RawInstruction::Call | RawInstruction::Jo => {
             if args.is_empty() {
                 token_panic(ins, "missing argument 'addr'");
             }
             if args.len() > 1 {
-                token_panic(args[2], "unexpected argument");
+                token_panic(args[0], "unexpected argument");
             }
-            match args[1].token {
-                Token::Val(val) => match raw_ins {
-                    RawInstruction::Jmp => Some(Instruction::Jump(
-                        validate_addr(val, 0x0FFF, 12).expect("failed to parse address"),
-                    )),
-                    RawInstruction::Call => Some(Instruction::SubroutineCall(
-                        validate_addr(val, 0x0FFF, 12).expect("failed to parse address"),
-                    )),
-                    _ => panic!("should never happen"),
-                },
-                Token::Reg(_) => token_panic(args[1], "expected value, found register"),
 
-                Token::Ins(_) => token_panic(args[1], "expected value, found instruction"),
+            let final_instruction = match raw_ins {
+                RawInstruction::Jmp => Instruction::Jump,
+                RawInstruction::Call => Instruction::SubroutineCall,
+                RawInstruction::Jo => Instruction::JumpOffset,
+                _ => panic!("should never happen"),
+            };
+
+            match args[0].token {
+                Token::Val(nnn) => Some(final_instruction(validate_u12(nnn))),
+                Token::Reg(_) => token_panic(args[0], "expected value, found register"),
+                Token::Ins(_) => token_panic(args[0], "expected value, found instruction"),
             }
         }
         RawInstruction::Ske | RawInstruction::Skn => {
-            if args.len() < 2 {
-                token_panic(args[0], "not enough arguments");
-            }
-            if args.len() > 2 {
-                token_panic(args[2], "unexpected argument");
-            }
-            match args[0].token {
-                Token::Ins(_) => token_panic(args[0], "expected register, found instruction"),
-                Token::Val(_) => token_panic(args[0], "expected register, found value"),
+            validate_two(&args, ins);
+
+            let final_instruction_1 = match raw_ins {
+                RawInstruction::Ske => Instruction::SkipConditional3,
+                RawInstruction::Skn => Instruction::SkipConditional4,
+                _ => panic!("should never happen"),
+            };
+
+            let final_instruction_2 = match raw_ins {
+                RawInstruction::Ske => Instruction::SkipConditional1,
+                RawInstruction::Skn => Instruction::SkipConditional2,
+                _ => panic!("should never happen"),
+            };
+
+            let vx = validate_token_vx(args[0]);
+
+            match args[1].token {
+                Token::Ins(_) => {
+                    token_panic(
+                        args[1],
+                        "only general-purpose registers (VX) are allowed in this operation",
+                    );
+                }
                 Token::Reg(reg) => {
-                    let RawRegister::Reg(reg) = reg else {
-                        token_panic(args[0], "invalid register for 'ske' operation")
-                    };
-                    match args[1].token {
-                        Token::Ins(_) => {
-                            token_panic(
-                                args[1],
-                                "only general-purpose registers (VX) are allowed in this operation",
-                            );
-                        }
-                        Token::Reg(reg2) => {
-                            let RawRegister::Reg(reg2) = reg2 else {
-                                token_panic(args[0], "invalid register for 'ske' operation")
-                            };
-                            match raw_ins {
-                                RawInstruction::Ske => {
-                                    Some(Instruction::SkipConditional3(reg, reg2))
-                                }
-                                RawInstruction::Skn => {
-                                    Some(Instruction::SkipConditional4(reg, reg2))
-                                }
-                                _ => panic!("should never happen"),
-                            }
-                        }
-                        Token::Val(v) => match raw_ins {
-                            RawInstruction::Ske => Some(Instruction::SkipConditional1(
-                                reg,
-                                validate_addr(v, 0xFF, 8).expect("failed to parse address"),
-                            )),
-                            RawInstruction::Skn => Some(Instruction::SkipConditional2(
-                                reg,
-                                validate_addr(v, 0xFF, 8).expect("failed to parse address"),
-                            )),
-                            _ => panic!("should never happen"),
-                        },
-                    }
+                    let vy = validate_vx(args[1], reg);
+                    Some(final_instruction_1(vx, vy))
+                }
+                Token::Val(nn) => {
+                    let nn = validate_u8(nn);
+                    Some(final_instruction_2(vx, nn))
                 }
             }
         }
@@ -365,66 +348,178 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
                             RawRegister::Sound => token_panic(src, "invalid source register: $s"),
                             RawRegister::I => token_panic(src, "invalid source register: $i"),
                         },
-                        Token::Val(val) => Some(Instruction::SetRegister(
-                            vx,
-                            validate_addr(val, 0xFF, 8).expect("failed to parse address"),
-                        )),
+                        Token::Val(nn) => Some(Instruction::SetRegister(vx, validate_u8(nn))),
                         Token::Ins(_) => {
                             token_panic(src, "expected value or register, found instruction")
                         }
                     },
                     // Valid options: u12
-                    RawRegister::I => match src.token {
-                        Token::Val(nnn) => Some(Instruction::SetIndexRegister(
-                            validate_addr(nnn, 0x0FFF, 12).expect("failed to parse address"),
-                        )),
-                        Token::Ins(_) => token_panic(src, "expected value, found instruction"),
-                        Token::Reg(_) => token_panic(src, "expected value, found register"),
-                    },
+                    RawRegister::I => {
+                        let nnn = validate_token_nnn(src);
+                        Some(Instruction::SetIndexRegister(nnn))
+                    }
                     // Valid options: vx
-                    RawRegister::Delay => match src.token {
-                        Token::Reg(reg) => match reg {
-                            RawRegister::Reg(vx) => Some(Instruction::SetDelayTimer(vx)),
-                            RawRegister::I | RawRegister::Delay | RawRegister::Sound => {
-                                token_panic(src, "invalid register for dst of $d")
-                            }
-                        },
-                        Token::Ins(_) => token_panic(src, "expected register, found instruction"),
-                        Token::Val(_) => token_panic(src, "expected register, found value"),
-                    },
+                    RawRegister::Delay => {
+                        let vx = validate_token_vx(src);
+                        Some(Instruction::SetDelayTimer(vx))
+                    }
                     // Valid options: vx
-                    RawRegister::Sound => match src.token {
-                        Token::Reg(reg) => match reg {
-                            RawRegister::Reg(vx) => Some(Instruction::SetSoundTimer(vx)),
-                            RawRegister::I | RawRegister::Delay | RawRegister::Sound => {
-                                token_panic(src, "invalid register for dst of $s")
-                            }
-                        },
-                        Token::Ins(_) => token_panic(src, "expected register, found instruction"),
-                        Token::Val(_) => token_panic(src, "expected register, found value"),
-                    },
+                    RawRegister::Sound => {
+                        let vx = validate_token_vx(src);
+                        Some(Instruction::SetSoundTimer(vx))
+                    }
                 },
                 _ => token_panic(dst, "invalid dest for 'mov'"),
             }
         }
-        RawInstruction::Add => todo!(),
-        RawInstruction::Or => todo!(),
-        RawInstruction::And => todo!(),
-        RawInstruction::Xor => todo!(),
-        RawInstruction::Sub1 => todo!(),
-        RawInstruction::Sub2 => todo!(),
-        RawInstruction::Shr => todo!(),
-        RawInstruction::Shl => todo!(),
-        RawInstruction::Jo => todo!(),
-        RawInstruction::Rand => todo!(),
-        RawInstruction::Draw => todo!(),
-        RawInstruction::Skk => todo!(),
-        RawInstruction::Sknk => todo!(),
-        RawInstruction::Key => todo!(),
-        RawInstruction::Bcd => todo!(),
-        RawInstruction::Store => todo!(),
-        RawInstruction::Load => todo!(),
+        RawInstruction::Add => {
+            let (dst, src) = validate_two(&args, ins);
+
+            match dst.token {
+                Token::Reg(dst_reg) => match dst_reg {
+                    // Valid options: vx, u8
+                    RawRegister::Reg(vx) => match src.token {
+                        Token::Reg(src_reg) => {
+                            let vy = validate_vx(src, src_reg);
+                            Some(Instruction::RegAdd(vx, vy))
+                        }
+                        Token::Val(nn) => Some(Instruction::Add(vx, validate_u8(nn))),
+                        Token::Ins(_) => {
+                            token_panic(src, "expected register or value, found instruction")
+                        }
+                    },
+                    // Valid options: vx
+                    RawRegister::I => {
+                        let vx = validate_token_vx(src);
+                        Some(Instruction::AddToIndex(vx))
+                    }
+                    _ => token_panic(
+                        dst,
+                        "only general-purpose registers (VX) or I are allowed in this operation",
+                    ),
+                },
+                Token::Ins(_) => token_panic(src, "expected register, found instruction"),
+                Token::Val(_) => token_panic(src, "expected register, found value"),
+            }
+        }
+        RawInstruction::Or
+        | RawInstruction::And
+        | RawInstruction::Xor
+        | RawInstruction::Sub1
+        | RawInstruction::Sub2
+        | RawInstruction::Shr
+        | RawInstruction::Shl => {
+            let (dst, src) = validate_two(&args, ins);
+
+            let final_instruction = match raw_ins {
+                RawInstruction::Or => Instruction::BinaryOr,
+                RawInstruction::And => Instruction::BinaryAnd,
+                RawInstruction::Xor => Instruction::BinaryXor,
+                RawInstruction::Sub1 => Instruction::Subtract1,
+                RawInstruction::Sub2 => Instruction::Subtract2,
+                RawInstruction::Shr => Instruction::ShiftRight,
+                RawInstruction::Shl => Instruction::ShiftLeft,
+                _ => panic!("should never happen"),
+            };
+
+            let vx = validate_token_vx(dst);
+            let vy = validate_token_vx(src);
+
+            Some(final_instruction(vx, vy))
+        }
+        RawInstruction::Rand => {
+            let (dst, src) = validate_two(&args, ins);
+
+            let vx = validate_token_vx(dst);
+            let nn = validate_token_nn(src);
+
+            Some(Instruction::Random(vx, nn))
+        }
+        RawInstruction::Draw => {
+            if args.len() < 3 {
+                token_panic(ins, "not enough arguments for instruction 'draw'");
+            }
+            if args.len() > 3 {
+                token_panic(args[3], "unexpected argument");
+            }
+
+            let vx = validate_token_vx(args[0]);
+            let vy = validate_token_vx(args[1]);
+            let n = validate_token_n(args[2]);
+
+            Some(Instruction::Draw(vx, vy, n))
+        }
+        RawInstruction::Skk | RawInstruction::Sknk | RawInstruction::Key | RawInstruction::Bcd => {
+            todo!()
+        }
+        RawInstruction::Store | RawInstruction::Load => todo!(),
     }
+}
+
+fn validate_token_n(token_info: &TokenInfo) -> u8 {
+    match token_info.token {
+        Token::Val(n) => validate_u4(n),
+        Token::Ins(_) => token_panic(token_info, "expected value, found instruction"),
+        Token::Reg(_) => token_panic(token_info, "expected value, found register"),
+    }
+}
+
+fn validate_token_nn(token_info: &TokenInfo) -> u8 {
+    match token_info.token {
+        Token::Val(nn) => validate_u8(nn),
+        Token::Ins(_) => token_panic(token_info, "expected value, found instruction"),
+        Token::Reg(_) => token_panic(token_info, "expected value, found register"),
+    }
+}
+
+fn validate_token_nnn(token_info: &TokenInfo) -> u16 {
+    match token_info.token {
+        Token::Val(nnn) => validate_u12(nnn),
+        Token::Ins(_) => token_panic(token_info, "expected value, found instruction"),
+        Token::Reg(_) => token_panic(token_info, "expected value, found register"),
+    }
+}
+
+fn validate_token_vx(token_info: &TokenInfo) -> Register {
+    match token_info.token {
+        Token::Reg(reg) => validate_vx(token_info, reg),
+        Token::Ins(_) => token_panic(token_info, "expected register, found instruction"),
+        Token::Val(_) => token_panic(token_info, "expected register, found value"),
+    }
+}
+
+fn validate_vx(token_info: &TokenInfo, reg: RawRegister) -> Register {
+    match reg {
+        RawRegister::Reg(vx) => vx,
+        _ => token_panic(
+            token_info,
+            "only general-purpose registers (VX) are allowed here",
+        ),
+    }
+}
+
+/// Validate that args contains two arguments, and return those arguments.
+fn validate_two<'a>(args: &[&'a TokenInfo], ins: &TokenInfo) -> (&'a TokenInfo, &'a TokenInfo) {
+    if args.len() < 2 {
+        token_panic(ins, "not enough arguments");
+    }
+    if args.len() > 2 {
+        token_panic(args[2], "unexpected argument");
+    }
+
+    (args[0], args[1])
+}
+
+fn validate_u4(val: usize) -> u8 {
+    validate_addr(val, 0x0F, 4).expect("failed to parse address")
+}
+
+fn validate_u8(val: usize) -> u8 {
+    validate_addr(val, 0xFF, 8).expect("failed to parse address")
+}
+
+fn validate_u12(val: usize) -> u16 {
+    validate_addr(val, 0x0FFF, 12).expect("failed to parse address")
 }
 
 fn validate_addr<T>(val: usize, mask: T, n_bits: usize) -> Result<T, String>
