@@ -1,4 +1,8 @@
-use std::{env, fs::File, io::Read};
+use std::{
+    env,
+    fs::File,
+    io::{Read, Write},
+};
 
 use c8util::{instructions::Instruction, register::Register};
 
@@ -14,12 +18,25 @@ fn main() {
     f.read_to_string(&mut buf).expect("failed to read file");
 
     let tokens = run_lexer(&buf);
-    println!("{tokens:?}");
     let output = run_parser(&tokens);
+    println!("{output:?}");
 
-    f = File::create(&args[2]).expect("failed to open output file");
-    // f.write_all(output.as_bytes())
-    //     .expect("failed to write result to file");
+    let serialized: Vec<_> = output
+        .iter()
+        .flat_map(|val| {
+            let s = val.serialize();
+            vec![
+                u8::try_from((s & 0xFF00) >> 8).unwrap(),
+                u8::try_from(s & 0xFF).unwrap(),
+            ]
+        })
+        .collect();
+
+    println!("{serialized:#X?}");
+
+    let mut f = File::create(&args[2]).expect("failed to open output file");
+    f.write_all(&serialized)
+        .expect("failed to write result to file");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -337,40 +354,75 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
             let dst = args[0];
             let src = args[1];
 
-            match dst.token {
-                // Moving into a register
-                Token::Reg(dst_reg) => match dst_reg {
-                    // Valid sources: vx, u8, d
-                    RawRegister::Reg(vx) => match dst.token {
-                        Token::Reg(src_reg) => match src_reg {
-                            RawRegister::Reg(vy) => Some(Instruction::RegSet(vx, vy)),
-                            RawRegister::Delay => Some(Instruction::GetDelayTimer(vx)),
-                            RawRegister::Sound => token_panic(src, "invalid source register: $s"),
-                            RawRegister::I => token_panic(src, "invalid source register: $i"),
-                        },
-                        Token::Val(nn) => Some(Instruction::SetRegister(vx, validate_u8(nn))),
-                        Token::Ins(_) => {
-                            token_panic(src, "expected value or register, found instruction")
-                        }
+            let dst_reg = match dst.token {
+                Token::Reg(dst_reg) => dst_reg,
+                Token::Ins(_) => token_panic(src, "expected register, found instruction"),
+                Token::Val(_) => token_panic(src, "expected register, found value"),
+            };
+
+            match dst_reg {
+                // Valid sources: vx, u8, d
+                RawRegister::Reg(vx) => match src.token {
+                    Token::Reg(src_reg) => match src_reg {
+                        RawRegister::Reg(vy) => Some(Instruction::RegSet(vx, vy)),
+                        RawRegister::Delay => Some(Instruction::GetDelayTimer(vx)),
+                        RawRegister::Sound => token_panic(src, "invalid source register: $s"),
+                        RawRegister::I => token_panic(src, "invalid source register: $i"),
                     },
-                    // Valid options: u12
-                    RawRegister::I => {
-                        let nnn = validate_token_nnn(src);
-                        Some(Instruction::SetIndexRegister(nnn))
-                    }
-                    // Valid options: vx
-                    RawRegister::Delay => {
-                        let vx = validate_token_vx(src);
-                        Some(Instruction::SetDelayTimer(vx))
-                    }
-                    // Valid options: vx
-                    RawRegister::Sound => {
-                        let vx = validate_token_vx(src);
-                        Some(Instruction::SetSoundTimer(vx))
+                    Token::Val(nn) => Some(Instruction::SetRegister(vx, validate_u8(nn))),
+                    Token::Ins(_) => {
+                        token_panic(src, "expected value or register, found instruction")
                     }
                 },
-                _ => token_panic(dst, "invalid dest for 'mov'"),
+                // Valid options: u12
+                RawRegister::I => {
+                    let nnn = validate_token_nnn(src);
+                    Some(Instruction::SetIndexRegister(nnn))
+                }
+                // Valid options: vx
+                RawRegister::Delay => {
+                    let vx = validate_token_vx(src);
+                    Some(Instruction::SetDelayTimer(vx))
+                }
+                // Valid options: vx
+                RawRegister::Sound => {
+                    let vx = validate_token_vx(src);
+                    Some(Instruction::SetSoundTimer(vx))
+                }
             }
+            // match dst.token {
+            //     Token::Reg(dst_reg) => match dst_reg {
+            //         // Valid sources: vx, u8, d
+            //         RawRegister::Reg(vx) => match dst.token {
+            //             Token::Reg(src_reg) => match src_reg {
+            //                 RawRegister::Reg(vy) => Some(Instruction::RegSet(vx, vy)),
+            //                 RawRegister::Delay => Some(Instruction::GetDelayTimer(vx)),
+            //                 RawRegister::Sound => token_panic(src, "invalid source register: $s"),
+            //                 RawRegister::I => token_panic(src, "invalid source register: $i"),
+            //             },
+            //             Token::Val(nn) => Some(Instruction::SetRegister(vx, validate_u8(nn))),
+            //             Token::Ins(_) => {
+            //                 token_panic(src, "expected value or register, found instruction")
+            //             }
+            //         },
+            //         // Valid options: u12
+            //         RawRegister::I => {
+            //             let nnn = validate_token_nnn(src);
+            //             Some(Instruction::SetIndexRegister(nnn))
+            //         }
+            //         // Valid options: vx
+            //         RawRegister::Delay => {
+            //             let vx = validate_token_vx(src);
+            //             Some(Instruction::SetDelayTimer(vx))
+            //         }
+            //         // Valid options: vx
+            //         RawRegister::Sound => {
+            //             let vx = validate_token_vx(src);
+            //             Some(Instruction::SetSoundTimer(vx))
+            //         }
+            //     },
+            //     _ => token_panic(dst, "invalid dest for 'mov'"),
+            // }
         }
         RawInstruction::Add => {
             let (dst, src) = validate_two(&args, ins);
@@ -549,26 +601,23 @@ fn validate_two<'a>(args: &[&'a TokenInfo], ins: &TokenInfo) -> (&'a TokenInfo, 
 
 /// Validates that the given value fits within 4 bits
 fn validate_u4(val: usize) -> u8 {
-    validate_addr(val, 0x0F, 4).expect("failed to parse address")
+    u8::try_from(validate_addr(val, 0x0F, 4).expect("failed to parse address")).unwrap()
 }
 
 /// Validates that the given value fits within 8 bits
 fn validate_u8(val: usize) -> u8 {
-    validate_addr(val, 0xFF, 8).expect("failed to parse address")
+    u8::try_from(validate_addr(val, 0xFF, 8).expect("failed to parse address")).unwrap()
 }
 
 /// Validates that the given value fits within 12 bits
 fn validate_u12(val: usize) -> u16 {
-    validate_addr(val, 0x0FFF, 12).expect("failed to parse address")
+    u16::try_from(validate_addr(val, 0x0FFF, 12).expect("failed to parse address")).unwrap()
 }
 
 /// Validates that the given value fits within the mask. `n_bits` is used in the error message.
-fn validate_addr<T>(val: usize, mask: T, n_bits: usize) -> Result<T, String>
-where
-    T: Copy + Into<usize>,
-{
-    if val & mask.into() == val {
-        Ok(mask)
+fn validate_addr(val: usize, mask: usize, n_bits: usize) -> Result<usize, String> {
+    if val & mask == val {
+        Ok(val)
     } else {
         Err(format!("value must be less than {n_bits} bits"))
     }
