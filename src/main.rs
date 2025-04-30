@@ -62,9 +62,11 @@ enum RawInstruction {
     Skk,
     Sknk,
     Key,
+    Font,
     Bcd,
     Store,
     Load,
+    Db,
 }
 
 impl TryFrom<&str> for RawInstruction {
@@ -93,9 +95,11 @@ impl TryFrom<&str> for RawInstruction {
             "skk" => Ok(Self::Skk),
             "sknk" => Ok(Self::Sknk),
             "key" => Ok(Self::Key),
+            "font" => Ok(Self::Font),
             "bcd" => Ok(Self::Bcd),
             "store" => Ok(Self::Store),
             "load" => Ok(Self::Load),
+            "db" => Ok(Self::Db),
             _ => Err(format!("unknown instruction: {value}")),
         }
     }
@@ -390,39 +394,6 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
                     Some(Instruction::SetSoundTimer(vx))
                 }
             }
-            // match dst.token {
-            //     Token::Reg(dst_reg) => match dst_reg {
-            //         // Valid sources: vx, u8, d
-            //         RawRegister::Reg(vx) => match dst.token {
-            //             Token::Reg(src_reg) => match src_reg {
-            //                 RawRegister::Reg(vy) => Some(Instruction::RegSet(vx, vy)),
-            //                 RawRegister::Delay => Some(Instruction::GetDelayTimer(vx)),
-            //                 RawRegister::Sound => token_panic(src, "invalid source register: $s"),
-            //                 RawRegister::I => token_panic(src, "invalid source register: $i"),
-            //             },
-            //             Token::Val(nn) => Some(Instruction::SetRegister(vx, validate_u8(nn))),
-            //             Token::Ins(_) => {
-            //                 token_panic(src, "expected value or register, found instruction")
-            //             }
-            //         },
-            //         // Valid options: u12
-            //         RawRegister::I => {
-            //             let nnn = validate_token_nnn(src);
-            //             Some(Instruction::SetIndexRegister(nnn))
-            //         }
-            //         // Valid options: vx
-            //         RawRegister::Delay => {
-            //             let vx = validate_token_vx(src);
-            //             Some(Instruction::SetDelayTimer(vx))
-            //         }
-            //         // Valid options: vx
-            //         RawRegister::Sound => {
-            //             let vx = validate_token_vx(src);
-            //             Some(Instruction::SetSoundTimer(vx))
-            //         }
-            //     },
-            //     _ => token_panic(dst, "invalid dest for 'mov'"),
-            // }
         }
         RawInstruction::Add => {
             let (dst, src) = validate_two(&args, ins);
@@ -501,7 +472,11 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
 
             Some(Instruction::Draw(vx, vy, n))
         }
-        RawInstruction::Skk | RawInstruction::Sknk | RawInstruction::Key | RawInstruction::Bcd => {
+        RawInstruction::Skk
+        | RawInstruction::Sknk
+        | RawInstruction::Key
+        | RawInstruction::Bcd
+        | RawInstruction::Font => {
             if args.is_empty() {
                 token_panic(ins, "not enough arguments (expected 1)")
             }
@@ -514,6 +489,7 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
                 RawInstruction::Sknk => Instruction::SkipIfNotKey,
                 RawInstruction::Key => Instruction::GetKey,
                 RawInstruction::Bcd => Instruction::BCD,
+                RawInstruction::Font => Instruction::FontCharacter,
                 _ => panic!("should never happen"),
             };
 
@@ -536,6 +512,18 @@ fn parse_line(line: &[TokenInfo]) -> Option<Instruction> {
 
             let nn = validate_token_nn(args[0]);
             Some(final_instruction(nn))
+        }
+        RawInstruction::Db => {
+            if args.is_empty() {
+                token_panic(ins, "not enough arguments (expected 1)")
+            }
+            if args.len() > 1 {
+                token_panic(args[1], "unexpected argument");
+            }
+
+            let nnnn = validate_token_nnnn(args[0]);
+
+            Some(Instruction::Db(nnnn))
         }
     }
 }
@@ -562,6 +550,15 @@ fn validate_token_nn(token_info: &TokenInfo) -> u8 {
 fn validate_token_nnn(token_info: &TokenInfo) -> u16 {
     match token_info.token {
         Token::Val(nnn) => validate_u12(nnn),
+        Token::Ins(_) => token_panic(token_info, "expected value, found instruction"),
+        Token::Reg(_) => token_panic(token_info, "expected value, found register"),
+    }
+}
+
+/// Validates that the given token is a Val with size 16 bits or less
+fn validate_token_nnnn(token_info: &TokenInfo) -> u16 {
+    match token_info.token {
+        Token::Val(nnn) => validate_u16(nnn),
         Token::Ins(_) => token_panic(token_info, "expected value, found instruction"),
         Token::Reg(_) => token_panic(token_info, "expected value, found register"),
     }
@@ -612,6 +609,11 @@ fn validate_u8(val: usize) -> u8 {
 /// Validates that the given value fits within 12 bits
 fn validate_u12(val: usize) -> u16 {
     u16::try_from(validate_addr(val, 0x0FFF, 12).expect("failed to parse address")).unwrap()
+}
+
+/// Validates that the given value fits within 16 bits
+fn validate_u16(val: usize) -> u16 {
+    u16::try_from(validate_addr(val, 0xFFFF, 12).expect("failed to parse address")).unwrap()
 }
 
 /// Validates that the given value fits within the mask. `n_bits` is used in the error message.
