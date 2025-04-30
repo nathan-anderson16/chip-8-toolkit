@@ -81,6 +81,8 @@ pub enum Instruction {
     StoreMemory(u8),
     /// FX65. Load the values of each register from V0 to VX, inclusive, at successive memory addresses, starting at I. TODO: Add a compatibility option to increment I each time a register is loaded.
     LoadMemory(u8),
+    /// Dedicate 4 bytes of space. Only used in assembly.
+    Db(u16),
 }
 
 impl Instruction {
@@ -144,6 +146,7 @@ impl Instruction {
             Instruction::BCD(vx) => 0xF033 | (u16::from(*vx) << 8),
             Instruction::StoreMemory(vx) => 0xF055 | (u16::from(*vx) << 8),
             Instruction::LoadMemory(vx) => 0xF065 | (u16::from(*vx) << 8),
+            Instruction::Db(nnnn) => *nnnn,
         }
     }
 }
