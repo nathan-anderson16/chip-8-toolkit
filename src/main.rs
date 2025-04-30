@@ -25,7 +25,7 @@ fn disassemble(v: &[u8]) {
             if let Some(i) = ins {
                 println!("{}", get_instruction(i));
             } else {
-                println!("(bad)");
+                println!("db    {code:#06X}");
             };
         });
 }
@@ -65,7 +65,7 @@ fn get_instruction(ins: Instruction) -> String {
         Instruction::AddToIndex(vx) => format!("add   $i, ${vx}"),
         Instruction::FontCharacter(vx) => format!("font  ${vx}"),
         Instruction::BCD(vx) => format!("bcd   ${vx}"),
-        Instruction::StoreMemory(vx) => format!("store ${vx}"),
-        Instruction::LoadMemory(vx) => format!("load  ${vx}"),
+        Instruction::StoreMemory(nn) => format!("store {nn:#02X}"),
+        Instruction::LoadMemory(nn) => format!("load  {nn:#02X}"),
     }
 }
