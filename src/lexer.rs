@@ -31,7 +31,7 @@ impl<'a> Lexer<'a> {
         self.peek(0)
     }
 
-    /// Return the most recently consumed character.
+    /// Return the character that was last consumed.
     fn prev(&self) -> Option<char> {
         self.buf.chars().nth(self.current - 1)
     }
