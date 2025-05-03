@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+c8util = { workspace = true }
+regex = "1.11.1"
 
 [lints]
 workspace = true

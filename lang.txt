@@ -1,0 +1,7 @@
+# -----Chip-8 C-----
+
+int main() {
+	u8 x = 0;
+	x += 1;
+	return x;
+}
