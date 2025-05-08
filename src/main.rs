@@ -67,5 +67,6 @@ fn get_instruction(ins: Instruction) -> String {
         Instruction::BCD(vx) => format!("bcd   ${vx}"),
         Instruction::StoreMemory(nn) => format!("store {nn:#02X}"),
         Instruction::LoadMemory(nn) => format!("load  {nn:#02X}"),
+        Instruction::Db(nnnn) => format!("db    {nnnn:#06X}"),
     }
 }
