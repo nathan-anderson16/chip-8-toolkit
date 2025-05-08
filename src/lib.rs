@@ -1,3 +1,4 @@
+pub mod compile;
 pub mod lexer;
 pub mod node;
 pub mod parser;
