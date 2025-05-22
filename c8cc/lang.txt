@@ -1,7 +1,11 @@
 # -----Grammar-----
-expr -> INTEGER
+expr -> Constant(INTEGER) | Unary(unary_op, expr)
 function -> "int" INDENTIFIER "(" ")" "{" statement "}"
 statement -> "return" expr ";"
+unary_op -> "!" | "~"
+
+# -----Notes-----
+- int is 8 bits
 
 # -----Chip-8 C-----
 

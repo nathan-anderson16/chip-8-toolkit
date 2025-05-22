@@ -9,7 +9,7 @@ fn main() {
 
     let if_path = Path::new(&args[1]);
 
-    let tokens = lex("int main() {\n    return 0;\n}");
+    let tokens = lex("int main() {\n    return !0;\n}");
     // println!("{tokens:?}");
     let program = parse(tokens);
     println!("{program:?}");

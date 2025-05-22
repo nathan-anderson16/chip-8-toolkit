@@ -64,6 +64,8 @@ impl<'a> Lexer<'a> {
                 '(' => Some(TokenInfo::new(Token::OpenParenthesis, self.current_line)),
                 ')' => Some(TokenInfo::new(Token::CloseParenthesis, self.current_line)),
                 ';' => Some(TokenInfo::new(Token::Semicolon, self.current_line)),
+                '~' => Some(TokenInfo::new(Token::BitwiseNot, self.current_line)),
+                '!' => Some(TokenInfo::new(Token::LogicalNot, self.current_line)),
                 _ if self.is_integer(current) => self.parse_integer_literal(),
                 _ => self.parse_identifier(),
             };

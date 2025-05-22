@@ -1,5 +1,5 @@
 use crate::{
-    node::{ExprNode, FunctionNode, ProgramNode, StatementNode},
+    node::{Expr, ExprNode, FunctionNode, ProgramNode, StatementNode, UnaryOp},
     token::{Keyword, Token, TokenInfo},
 };
 
@@ -116,11 +116,24 @@ impl Parser {
     fn parse_expr(&mut self) -> ExprNode {
         let token = get_token!(self, "expr");
 
-        let Token::IntegerLiteral(expr) = token.token else {
-            error!(self, "expected expr, found {:?}", token.token);
-        };
+        if let Some(unary) = Self::try_parse_unary(&token) {
+            return ExprNode {
+                value: Expr::Unary(unary, Box::new(self.parse_expr())),
+            };
+        } else if let Token::IntegerLiteral(expr) = token.token {
+            return ExprNode {
+                value: Expr::Constant(expr),
+            };
+        }
+        error!(self, "expected expr, found {:?}", token.token);
+    }
 
-        ExprNode { value: expr }
+    fn try_parse_unary(token: &TokenInfo) -> Option<UnaryOp> {
+        match token.token {
+            Token::BitwiseNot => Some(UnaryOp::BitwiseNot),
+            Token::LogicalNot => Some(UnaryOp::LogicalNot),
+            _ => None,
+        }
     }
 }
 

@@ -16,6 +16,10 @@ pub enum Token {
     Identifier(String),
     /// 1, 2, 3, etc.
     IntegerLiteral(usize),
+    /// ~
+    BitwiseNot,
+    /// !
+    LogicalNot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
