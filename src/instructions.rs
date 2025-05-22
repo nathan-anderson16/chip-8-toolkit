@@ -149,4 +149,46 @@ impl Instruction {
             Instruction::Db(nnnn) => *nnnn,
         }
     }
+
+    /// Converts Self to its assembly equivalent.
+    pub fn asm(&self) -> String {
+        match self {
+            Instruction::ExecuteMachineLanguageRoutine => "db    0x0000".to_string(),
+            Instruction::Clear => "clear".to_string(),
+            Instruction::SubroutineReturn => "ret".to_string(),
+            Instruction::Jump(nnn) => format!("jmp   {nnn:#06X}"),
+            Instruction::SubroutineCall(nnn) => format!("call  {nnn:#06X}"),
+            Instruction::SkipConditional1(vx, nn) => format!("ske   ${vx}, {nn:#04X}"),
+            Instruction::SkipConditional2(vx, nn) => format!("skn   ${vx}, {nn:#04X}"),
+            Instruction::SkipConditional3(vx, vy) => format!("ske   ${vx}, ${vy}"),
+            Instruction::SetRegister(vx, nn) => format!("mov   ${vx}, {nn:#04X}"),
+            Instruction::Add(vx, nn) => format!("add   ${vx}, {nn:#04X}"),
+            Instruction::RegSet(vx, vy) => format!("mov   ${vx}, ${vy}"),
+            Instruction::BinaryOr(vx, vy) => format!("or    ${vx}, ${vy}"),
+            Instruction::BinaryAnd(vx, vy) => format!("and   ${vx}, ${vy}"),
+            Instruction::BinaryXor(vx, vy) => format!("xor   ${vx}, ${vy}"),
+            Instruction::RegAdd(vx, vy) => format!("add   ${vx}, ${vy}"),
+            Instruction::Subtract1(vx, vy) => format!("sub1  ${vx}, ${vy}"),
+            Instruction::ShiftRight(vx, vy) => format!("shr   ${vx}, ${vy}"),
+            Instruction::Subtract2(vx, vy) => format!("sub2  ${vx}, ${vy}"),
+            Instruction::ShiftLeft(vx, vy) => format!("shl   ${vx}, ${vy}"),
+            Instruction::SkipConditional4(vx, vy) => format!("skn   ${vx}, ${vy}"),
+            Instruction::SetIndexRegister(nnn) => format!("mov   $i, {nnn:#06X}"),
+            Instruction::JumpOffset(nnn) => format!("jo    {nnn:#06X}"),
+            Instruction::Random(vx, nn) => format!("rand  ${vx}, {nn:#04X}"),
+            Instruction::Draw(vx, vy, n) => format!("draw  ${vx}, ${vy}, {n:#04X}"),
+            Instruction::SkipIfKey(vx) => format!("skk   ${vx}"),
+            Instruction::SkipIfNotKey(vx) => format!("sknk  ${vx}"),
+            Instruction::GetDelayTimer(vx) => format!("mov   ${vx}, $d"),
+            Instruction::GetKey(vx) => format!("key   ${vx}"),
+            Instruction::SetDelayTimer(vx) => format!("mov   $d, ${vx}"),
+            Instruction::SetSoundTimer(vx) => format!("mov   $s, ${vx}"),
+            Instruction::AddToIndex(vx) => format!("add   $i, ${vx}"),
+            Instruction::FontCharacter(vx) => format!("font  ${vx}"),
+            Instruction::BCD(vx) => format!("bcd   ${vx}"),
+            Instruction::StoreMemory(n) => format!("store {n:#04X}"),
+            Instruction::LoadMemory(n) => format!("load  {n:#04X}"),
+            Instruction::Db(nnnn) => format!("db    {nnnn:#06X}"),
+        }
+    }
 }
