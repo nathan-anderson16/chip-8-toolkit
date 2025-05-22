@@ -36,9 +36,9 @@ impl NonblockingReader {
                     buf += String::from_utf8(Vec::from(buffer)).unwrap().as_str();
                     stdin.consume(len);
 
-                    if len > 0 {
-                        println!("Updated: {buf:?}");
-                    }
+                    // if len > 0 {
+                    //     println!("Updated: {buf:?}");
+                    // }
 
                     if let Some(nl) = buf.find('\n') {
                         tx.send(buf[..nl].to_string()).unwrap();

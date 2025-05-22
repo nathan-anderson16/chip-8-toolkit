@@ -45,6 +45,7 @@ pub struct DebugState {
     pub last_pressed_keys: Vec<Keycode>,
 }
 
+#[allow(dead_code)]
 fn print_message(_debug_state: &mut DebugState, message: String) {
     print!("\x1b[2K\r> ");
     // This is necessary to clear the [[^A that's printed when arrow keys are pressed
@@ -58,52 +59,52 @@ fn print_message(_debug_state: &mut DebugState, message: String) {
 /// Gets the next line to interpret as a command, including history.
 fn get_line(debug_state: &mut DebugState) -> String {
     let device_state = DeviceState::new();
-    let mut current_history_idx = 0usize;
+    // let mut current_history_idx = 0usize;
     loop {
         let keys = device_state.get_keys();
 
-        // History management
-        if keys.contains(&Keycode::Up) && !debug_state.last_pressed_keys.contains(&Keycode::Up) {
-            // Go back in history
-            if debug_state.history.is_empty() {
-                print!("\x1b[2K\r> ");
-                io::stdout().flush().unwrap();
-                continue;
-            }
-            current_history_idx = current_history_idx
-                .saturating_add(1)
-                .min(debug_state.history.len());
-            let message =
-                debug_state.history[debug_state.history.len() - current_history_idx].clone();
-            debug_state.reader.set_contents(message.clone());
-            print_message(debug_state, message);
-        }
+        // // History management
+        // if keys.contains(&Keycode::Up) && !debug_state.last_pressed_keys.contains(&Keycode::Up) {
+        //     // Go back in history
+        //     if debug_state.history.is_empty() {
+        //         print!("\x1b[2K\r> ");
+        //         io::stdout().flush().unwrap();
+        //         continue;
+        //     }
+        //     current_history_idx = current_history_idx
+        //         .saturating_add(1)
+        //         .min(debug_state.history.len());
+        //     let message =
+        //         debug_state.history[debug_state.history.len() - current_history_idx].clone();
+        //     debug_state.reader.set_contents(message.clone());
+        //     print_message(debug_state, message);
+        // }
 
-        if keys.contains(&Keycode::Down) && !debug_state.last_pressed_keys.contains(&Keycode::Down)
-        {
-            // Go forward in history
-            if debug_state.history.is_empty() {
-                print!("\x1b[2K\r> ");
-                io::stdout().flush().unwrap();
-                continue;
-            }
-            current_history_idx = current_history_idx.saturating_sub(1);
-            if current_history_idx == debug_state.history.len() {
-                current_history_idx = current_history_idx.saturating_sub(1);
-            }
-            let a = debug_state.history.len() - current_history_idx;
+        // if keys.contains(&Keycode::Down) && !debug_state.last_pressed_keys.contains(&Keycode::Down)
+        // {
+        //     // Go forward in history
+        //     if debug_state.history.is_empty() {
+        //         print!("\x1b[2K\r> ");
+        //         io::stdout().flush().unwrap();
+        //         continue;
+        //     }
+        //     current_history_idx = current_history_idx.saturating_sub(1);
+        //     if current_history_idx == debug_state.history.len() {
+        //         current_history_idx = current_history_idx.saturating_sub(1);
+        //     }
+        //     let a = debug_state.history.len() - current_history_idx;
 
-            let message = format!(
-                "\x1b[2K\r> {}",
-                if a < debug_state.history.len() {
-                    debug_state.history[debug_state.history.len() - current_history_idx].clone()
-                } else {
-                    String::new()
-                }
-            );
-            debug_state.reader.set_contents(message.clone());
-            print_message(debug_state, message);
-        }
+        //     let message = format!(
+        //         "\x1b[2K\r> {}",
+        //         if a < debug_state.history.len() {
+        //             debug_state.history[debug_state.history.len() - current_history_idx].clone()
+        //         } else {
+        //             String::new()
+        //         }
+        //     );
+        //     debug_state.reader.set_contents(message.clone());
+        //     print_message(debug_state, message);
+        // }
         if let Some(line) = debug_state.reader.readline() {
             return line;
         }
