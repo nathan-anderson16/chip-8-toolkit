@@ -1,0 +1,30 @@
+[workspace]
+members = [
+    "crates/c8util",
+    "c8asm",
+    "c8cc",
+    "c8disass",
+    "c8rs",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.1"
+
+[workspace.dependencies]
+c8util = { version = "0.1.0", path = "crates/c8util" }
+device_query = "3.0.1"
+
+[workspace.lints.rust]
+unsafe-op-in-unsafe-fn = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+must-use-candidate = "allow"
+missing-safety-doc = "warn"
+undocumented-unsafe-blocks = "warn"
+module_name_repetitions = "allow"
+missing_panics_doc = "allow"
+
