@@ -1,0 +1,6 @@
+mov   $V0, 0x00
+font  $V0
+mov   $V0, 0x00
+mov   $V1, 0x00
+draw  $V0, $V1, 0x0F
+jmp   0x020A
