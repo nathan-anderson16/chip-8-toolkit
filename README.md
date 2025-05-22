@@ -2,7 +2,7 @@ A collection of tools for the Chip-8 platform, written in Rust.
 
 These were written primarily as a learning experience.
 
-Tested on Linux Mint 22.1 Cinnamon, with the Kitty terminal.
+Tested on Linux Mint 22.1 Cinnamon, although the code should be OS-independent.
 
 # Tools
 ## c8rs
