@@ -1,0 +1,11 @@
+[package]
+name = "c8disass"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+c8util = { workspace = true }
+
+[lints]
+workspace = true
